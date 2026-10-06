@@ -23,7 +23,17 @@ export default tseslint.config(
     files: ['**/*.{ts,tsx,mts,cts}'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
       'no-console': ['error', { allow: ['warn', 'error'] }],
+    },
+  },
+  {
+    files: ['**/seed.ts', '**/seeds/**'],
+    rules: {
+      'no-console': ['error', { allow: ['info', 'warn', 'error'] }],
     },
   },
   {
