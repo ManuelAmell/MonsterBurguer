@@ -35,3 +35,9 @@ export type TipoMovimientoInventario = (typeof TIPOS_MOVIMIENTO_INVENTARIO)[numb
 
 export const REGIMENES_TRIBUTARIOS = ['NO_RESPONSABLE', 'INC_8', 'IVA_19'] as const;
 export type RegimenTributario = (typeof REGIMENES_TRIBUTARIOS)[number];
+
+export const ESTADOS_SESION_CAJA = ['ABIERTA', 'CERRADA'] as const;
+export type EstadoSesionCaja = (typeof ESTADOS_SESION_CAJA)[number];
+
+export const TIPOS_MOVIMIENTO_CAJA = ['INGRESO', 'RETIRO'] as const;
+export type TipoMovimientoCaja = (typeof TIPOS_MOVIMIENTO_CAJA)[number];
