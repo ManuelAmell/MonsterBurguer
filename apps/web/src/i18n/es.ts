@@ -45,4 +45,37 @@ export const t = {
     sinComandas: 'Sin comandas por ahora',
     sinComandasDescripcion: 'Cuando caja envíe un pedido aparecerá aquí al instante.',
   },
+  kit: {
+    titulo: 'Vitrina de Componentes UI',
+    subtitulo: 'Kit presentacional del POS MonsterBurguer (Tokens, Táctil ≥ 48px, Modo Claro/Oscuro)',
+    modoClaro: 'Modo claro',
+    modoOscuro: 'Modo oscuro',
+    secciones: {
+      pos: 'Componentes del Punto de Venta (POS)',
+      kds: 'Cocina (KDS)',
+      admin: 'Administración e Inventario',
+      shadcn: 'Componentes Base shadcn/ui',
+    },
+    estados: {
+      pendiente: 'Pendiente',
+      preparando: 'Preparando',
+      lista: 'Lista',
+      entregada: 'Entregada',
+      atrasoLeve: '+8 min',
+      atrasoGrave: '+12 min',
+      agotado: 'Agotado',
+      stockBajo: 'Stock bajo',
+      pagado: 'Pagado',
+      anulado: 'Anulado',
+    },
+    ejemplos: {
+      agregarNota: 'Nota agregada: Sin cebolla, extra salsa de la casa',
+      abrirDialogo: 'Abrir diálogo modal',
+      abrirAlerta: 'Abrir diálogo de confirmación',
+      abrirSheet: 'Abrir formulario lateral',
+      cobrar: 'Cobrar pedido',
+      enviarCocina: 'Enviar a cocina',
+    },
+  },
 } as const;
+
