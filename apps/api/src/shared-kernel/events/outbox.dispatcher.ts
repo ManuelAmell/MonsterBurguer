@@ -1,0 +1,122 @@
+import {
+  Inject,
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap,
+  type OnApplicationShutdown,
+} from '@nestjs/common';
+import { and, asc, eq, isNull, lt, sql } from 'drizzle-orm';
+import type { Pool, PoolClient } from 'pg';
+import { DB, PG_POOL, type Db } from '../db/db';
+import { CANAL_EVENTOS, EventBus, type EventoPublicado } from './event-bus';
+import { eventoSistema } from './evento-sistema.schema';
+
+const LOTE = 50;
+const MAX_INTENTOS = 10;
+const SONDEO_MS = 5_000;
+
+/**
+ * Ejecuta los handlers post-commit leyendo `evento_sistema` pendiente.
+ * Se despierta con LISTEN/NOTIFY al instante y además sondea cada 5 s por si se perdió una notificación.
+ */
+@Injectable()
+export class OutboxDispatcher implements OnApplicationBootstrap, OnApplicationShutdown {
+  private readonly logger = new Logger(OutboxDispatcher.name);
+  private listener: PoolClient | null = null;
+  private timer: NodeJS.Timeout | null = null;
+  private drenando: Promise<void> | null = null;
+  private pendiente = false;
+  private detenido = false;
+
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    @Inject(PG_POOL) private readonly pool: Pool,
+    private readonly bus: EventBus,
+  ) {}
+
+  async onApplicationBootstrap(): Promise<void> {
+    this.listener = await this.pool.connect();
+    this.listener.on('notification', () => this.despertar());
+    await this.listener.query(`LISTEN ${CANAL_EVENTOS}`);
+    this.timer = setInterval(() => this.despertar(), SONDEO_MS);
+    this.despertar();
+  }
+
+  async onApplicationShutdown(): Promise<void> {
+    this.detenido = true;
+    if (this.timer) clearInterval(this.timer);
+    await this.drenando;
+    if (this.listener) {
+      await this.listener.query(`UNLISTEN ${CANAL_EVENTOS}`).catch(() => undefined);
+      this.listener.release();
+      this.listener = null;
+    }
+  }
+
+  /** Espera a que no quede nada pendiente (útil en tests). */
+  async drenar(): Promise<void> {
+    this.despertar();
+    while (this.drenando) await this.drenando;
+  }
+
+  private despertar(): void {
+    if (this.detenido) return;
+    if (this.drenando) {
+      this.pendiente = true;
+      return;
+    }
+    this.drenando = this.procesarHastaVaciar()
+      .catch((err: unknown) => this.logger.error(err))
+      .finally(() => {
+        this.drenando = null;
+        if (this.pendiente) {
+          this.pendiente = false;
+          this.despertar();
+        }
+      });
+  }
+
+  private async procesarHastaVaciar(): Promise<void> {
+    while (!this.detenido && (await this.procesarLote()) === LOTE) {
+      // seguir mientras haya lotes completos
+    }
+  }
+
+  private async procesarLote(): Promise<number> {
+    return this.db.transaction(async (tx) => {
+      const filas = await tx
+        .select()
+        .from(eventoSistema)
+        .where(and(isNull(eventoSistema.procesadoAt), lt(eventoSistema.intentos, MAX_INTENTOS)))
+        .orderBy(asc(eventoSistema.id))
+        .limit(LOTE)
+        .for('update', { skipLocked: true });
+
+      for (const fila of filas) {
+        const evento: EventoPublicado = {
+          id: fila.id,
+          tipo: fila.tipo,
+          modulo: fila.modulo,
+          agregadoId: fila.agregadoId,
+          usuarioId: fila.usuarioId,
+          payload: fila.payload,
+          createdAt: fila.createdAt,
+        };
+        try {
+          for (const handler of this.bus.handlersPostCommitDe(fila.tipo)) await handler(evento);
+          await tx
+            .update(eventoSistema)
+            .set({ procesadoAt: sql`now()` })
+            .where(eq(eventoSistema.id, fila.id));
+        } catch (err) {
+          this.logger.warn(`Handler post-commit falló para evento ${fila.id} (${fila.tipo}): ${String(err)}`);
+          await tx
+            .update(eventoSistema)
+            .set({ intentos: sql`${eventoSistema.intentos} + 1`, ultimoError: String(err) })
+            .where(eq(eventoSistema.id, fila.id));
+        }
+      }
+      return filas.length;
+    });
+  }
+}
