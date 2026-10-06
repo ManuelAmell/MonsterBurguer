@@ -7,6 +7,7 @@ import type { Env } from './config/env';
 import { HealthController } from './health/health.controller';
 import { OrigenGuard, RolesGuard, SesionGuard } from './modules/identidad/auth.guards';
 import { IdentidadModule } from './modules/identidad/identidad.module';
+import { RealtimeModule } from './modules/realtime/realtime.public';
 import { DbModule } from './shared-kernel/db/db.module';
 import { EventsModule } from './shared-kernel/events/events.module';
 
@@ -31,6 +32,7 @@ export class AppModule {
         DbModule,
         EventsModule,
         IdentidadModule,
+        RealtimeModule,
       ],
       controllers: [HealthController],
       // Orden de evaluación: origen (CSRF) → límite de peticiones → sesión → rol.

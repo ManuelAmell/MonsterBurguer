@@ -41,3 +41,7 @@ export type EstadoSesionCaja = (typeof ESTADOS_SESION_CAJA)[number];
 
 export const TIPOS_MOVIMIENTO_CAJA = ['INGRESO', 'RETIRO'] as const;
 export type TipoMovimientoCaja = (typeof TIPOS_MOVIMIENTO_CAJA)[number];
+
+export const CANALES_REALTIME = ['cocina', 'pos', 'admin'] as const;
+export type CanalRealtime = (typeof CANALES_REALTIME)[number];
+
