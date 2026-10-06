@@ -3,10 +3,7 @@
 // { path: '/vitrina', element: <VitrinaPage /> }
 
 import {
-  AlertTriangle,
-  BadgePercent,
   Beef,
-  CheckCircle2,
   Clock,
   Coffee,
   DollarSign,
@@ -16,7 +13,6 @@ import {
   Package,
   Plus,
   Receipt,
-  RotateCcw,
   ShoppingBag,
   Sun,
   UtensilsCrossed,
@@ -58,7 +54,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
 import {
   Sheet,
   SheetClose,

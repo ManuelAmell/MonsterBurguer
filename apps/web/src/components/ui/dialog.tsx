@@ -7,6 +7,7 @@ import {
   useState,
   type ComponentProps,
   type Dispatch,
+  type MouseEvent,
   type ReactNode,
   type SetStateAction,
 } from 'react';
@@ -68,7 +69,7 @@ export function DialogTrigger({
     <Comp
       type="button"
       className={className}
-      onClick={(e: any) => {
+      onClick={(e: MouseEvent<HTMLButtonElement>) => {
         onClick?.(e);
         context.setOpen(true);
       }}
@@ -95,7 +96,7 @@ export function DialogClose({
     <Comp
       type="button"
       className={className}
-      onClick={(e: any) => {
+      onClick={(e: MouseEvent<HTMLButtonElement>) => {
         onClick?.(e);
         context.setOpen(false);
       }}
@@ -174,7 +175,7 @@ export function DialogContent({
               type="button"
               aria-label="Cerrar diálogo"
               onClick={() => context.setOpen(false)}
-              className="absolute top-4 right-4 flex size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97]"
+              className="absolute top-4 right-4 flex size-12 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97]"
             >
               <X className="size-5" />
             </button>

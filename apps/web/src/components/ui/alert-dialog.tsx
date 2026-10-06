@@ -6,6 +6,7 @@ import {
   useState,
   type ComponentProps,
   type Dispatch,
+  type MouseEvent,
   type ReactNode,
   type SetStateAction,
 } from 'react';
@@ -68,7 +69,7 @@ export function AlertDialogTrigger({
     <Comp
       type="button"
       className={className}
-      onClick={(e: any) => {
+      onClick={(e: MouseEvent<HTMLButtonElement>) => {
         onClick?.(e);
         context.setOpen(true);
       }}

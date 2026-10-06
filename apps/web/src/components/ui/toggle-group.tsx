@@ -43,28 +43,41 @@ interface ToggleGroupContextValue {
 
 const ToggleGroupContext = createContext<ToggleGroupContextValue | null>(null);
 
-export interface ToggleGroupProps extends Omit<ComponentProps<'div'>, 'onChange'> {
-  type?: ToggleGroupType;
-  value?: string | string[];
-  defaultValue?: string | string[];
-  onValueChange?: (value: any) => void;
+interface ToggleGroupBaseProps extends Omit<ComponentProps<'div'>, 'onChange'> {
   variant?: VariantProps<typeof toggleGroupVariants>['variant'];
   size?: VariantProps<typeof toggleGroupVariants>['size'];
   orientation?: 'horizontal' | 'vertical';
 }
 
-export function ToggleGroup({
-  type = 'single',
-  value: controlledValue,
-  defaultValue,
-  onValueChange,
-  variant = 'default',
-  size = 'default',
-  orientation = 'horizontal',
-  className,
-  children,
-  ...props
-}: ToggleGroupProps) {
+export interface ToggleGroupSingleProps extends ToggleGroupBaseProps {
+  type?: 'single';
+  value?: string;
+  defaultValue?: string;
+  onValueChange?: (value: string) => void;
+}
+
+export interface ToggleGroupMultipleProps extends ToggleGroupBaseProps {
+  type: 'multiple';
+  value?: string[];
+  defaultValue?: string[];
+  onValueChange?: (value: string[]) => void;
+}
+
+export type ToggleGroupProps = ToggleGroupSingleProps | ToggleGroupMultipleProps;
+
+export function ToggleGroup(props: ToggleGroupProps) {
+  const {
+    type = 'single',
+    value: controlledValue,
+    defaultValue,
+    variant = 'default',
+    size = 'default',
+    orientation = 'horizontal',
+    className,
+    children,
+    ...restProps
+  } = props;
+
   const isControlled = controlledValue !== undefined;
   const initialValue =
     controlledValue ?? defaultValue ?? (type === 'multiple' ? [] : '');
@@ -72,15 +85,15 @@ export function ToggleGroup({
   const currentValue = isControlled ? controlledValue : initialValue;
 
   const handleItemSelect = (itemValue: string) => {
-    if (type === 'single') {
-      const nextValue = currentValue === itemValue ? '' : itemValue;
-      onValueChange?.(nextValue);
-    } else {
+    if (props.type === 'multiple') {
       const currentList = Array.isArray(currentValue) ? currentValue : [];
       const nextList = currentList.includes(itemValue)
         ? currentList.filter((v) => v !== itemValue)
         : [...currentList, itemValue];
-      onValueChange?.(nextList);
+      props.onValueChange?.(nextList);
+    } else {
+      const nextValue = currentValue === itemValue ? '' : itemValue;
+      props.onValueChange?.(nextValue);
     }
   };
 
@@ -103,7 +116,7 @@ export function ToggleGroup({
           orientation === 'vertical' ? 'flex-col' : 'flex-row',
           className,
         )}
-        {...props}
+        {...restProps}
       >
         {children}
       </div>
