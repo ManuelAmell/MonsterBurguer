@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: monsterburguer-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mb_dev_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-monsterburguer}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mb} -d ${POSTGRES_DB:-monsterburguer}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    container_name: monsterburguer-api
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mb}:${POSTGRES_PASSWORD:-mb_dev_pass}@postgres:5432/${POSTGRES_DB:-monsterburguer}
+      SESSION_SECRET: ${SESSION_SECRET:-mb_secret_super_secure_key_production}
+      APP_ORIGIN: http://localhost
+      TZ: America/Bogota
+      LOG_LEVEL: info
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  nginx:
+    container_name: monsterburguer-nginx
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
