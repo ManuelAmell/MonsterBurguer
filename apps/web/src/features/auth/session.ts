@@ -43,6 +43,9 @@ export function useLogout() {
     onSettled: () => {
       qc.clear();
       qc.setQueryData(sesionQuery.queryKey, null);
+      if (window.location.pathname !== '/login') {
+        window.location.replace('/login');
+      }
     },
   });
 }
