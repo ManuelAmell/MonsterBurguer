@@ -11,7 +11,6 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { ingrediente } from '../inventario/inventario.public';
 
 export const categoria = pgTable('categoria', {
   id: uuid().primaryKey(),
@@ -52,9 +51,7 @@ export const recetaItem = pgTable(
     productoId: uuid()
       .notNull()
       .references(() => producto.id, { onDelete: 'cascade' }),
-    ingredienteId: uuid()
-      .notNull()
-      .references(() => ingrediente.id, { onDelete: 'cascade' }),
+    ingredienteId: uuid().notNull(),
     cantidad: integer().notNull(),
   },
   (t) => [
