@@ -556,6 +556,6 @@ export class InventarioService {
       .select()
       .from(configuracion)
       .where(eq(configuracion.clave, 'permitir_stock_negativo'));
-    return Boolean(cfg?.valor);
+    return cfg?.valor === true || cfg?.valor === 'true';
   }
 }

@@ -1,6 +1,6 @@
 import { HttpStatus, Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import type { Unidad } from '@mb/shared';
-import { DB, type Db } from '../../shared-kernel/db/db';
+import { DB, type Db, type Executor } from '../../shared-kernel/db/db';
 import { DomainError } from '../../shared-kernel/errors/domain-error';
 import { EventBus } from '../../shared-kernel/events/event-bus';
 import { nuevoId } from '../../shared-kernel/ids';
@@ -104,11 +104,11 @@ export class CatalogoService implements OnModuleInit {
     return this.repo.listarProductos(filtros);
   }
 
-  async obtenerProductoPorId(id: string) {
-    const prod = await this.repo.obtenerProductoPorId(id);
+  async obtenerProductoPorId(id: string, tx?: Executor) {
+    const prod = await this.repo.obtenerProductoPorId(id, tx);
     if (!prod) throw DomainError.noEncontrado('Producto no encontrado.');
 
-    const itemsReceta = await this.repo.obtenerItemsReceta(id);
+    const itemsReceta = await this.repo.obtenerItemsReceta(id, tx);
     const ingIds = itemsReceta.map((r) => r.ingredienteId);
     const ingredientes = await this.inventarioService.obtenerIngredientesPorIds(ingIds);
     const mapaIng = new Map(ingredientes.map((i) => [i.id, i]));
@@ -224,7 +224,7 @@ export class CatalogoService implements OnModuleInit {
         await this.evaluarDisponibilidadProducto(id, tx);
       }
 
-      return this.obtenerProductoPorId(id);
+      return this.obtenerProductoPorId(id, tx);
     });
   }
 
