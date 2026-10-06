@@ -9,3 +9,5 @@ export * from './schemas/inventario';
 export * from './schemas/pedidos';
 export * from './schemas/cocina';
 export * from './schemas/caja';
+export * from './schemas/clientes';
+

@@ -5,10 +5,13 @@ import {
   confirmarPedidoSchema,
   crearMesaSchema,
   crearPedidoSchema,
+  editarMesaSchema,
   editarPedidoItemSchema,
+  mesaConEstadoSchema,
   mesaSchema,
   pedidoItemSchema,
   pedidoSchema,
+  reordenarMesasSchema,
 } from './pedidos';
 
 const ID_MESA = '0199b2c4-1111-7000-8000-000000000001';
@@ -234,6 +237,41 @@ describe('schemas/pedidos', () => {
         orden: 1,
       });
       expect(m.id).toBe(ID_MESA);
+    });
+
+    it('valida edición de mesa (renombrar, desactivar, ordenar)', () => {
+      const editada = editarMesaSchema.parse({
+        nombre: 'Mesa VIP',
+        activa: false,
+        orden: 5,
+        capacidad: 6,
+      });
+      expect(editada.nombre).toBe('Mesa VIP');
+      expect(editada.activa).toBe(false);
+      expect(editada.orden).toBe(5);
+      expect(editada.capacidad).toBe(6);
+    });
+
+    it('valida mesaConEstadoSchema con ocupada y pedidoId', () => {
+      const conEstado = mesaConEstadoSchema.parse({
+        id: ID_MESA,
+        nombre: 'Mesa 1',
+        capacidad: 4,
+        activa: true,
+        orden: 1,
+        ocupada: false,
+        pedidoId: null,
+      });
+      expect(conEstado.ocupada).toBe(false);
+      expect(conEstado.pedidoId).toBeNull();
+    });
+
+    it('valida reordenarMesasSchema', () => {
+      const reorden = reordenarMesasSchema.parse({
+        mesas: [{ id: ID_MESA, orden: 2 }],
+      });
+      expect(reorden.mesas).toHaveLength(1);
+      expect(reorden.mesas[0]?.orden).toBe(2);
     });
   });
 });
