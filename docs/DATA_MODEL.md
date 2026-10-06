@@ -1,9 +1,9 @@
-# Modelo de datos — MonsterBurguer POS (PostgreSQL 18)
+# Modelo de datos — MonsterBurguer POS (PostgreSQL 17 / compatible PG 18)
 
 ## Convenciones
 
 - Tablas y columnas en `snake_case`, en español y en singular (`pedido`, `pedido_item`).
-- PK `id uuid DEFAULT uuidv7()` (ordenable por tiempo, nativo en PG 18). Tablas de catálogo pequeñas también usan uuid por uniformidad.
+- PK `id uuid` generado en la aplicación como **UUID v7** (ordenable por tiempo, compatible con PG 17 y PG 18 sin requerir extensión o función nativa de BD).
 - Fechas `timestamptz` (UTC). Columnas `created_at` / `updated_at` en todas las tablas mutables.
 - Dinero: `bigint` en **pesos COP** (RN-01). Cantidades de inventario: `integer`/`bigint` en unidad base (RN-30).
 - Estados como `text` + `CHECK (estado IN (...))` (más fácil de migrar que `ENUM`); los valores viven en `@mb/shared/enums.ts`.
@@ -45,9 +45,9 @@ erDiagram
 
 | Columna | Tipo | Restricciones |
 |---|---|---|
-| id | uuid | PK |
+| id | uuid | PK (generado en app con UUID v7) |
 | nombre | text | NOT NULL |
-| username | citext | UNIQUE NOT NULL |
+| username | text | UNIQUE NOT NULL, CHECK (`username = lower(username)`) |
 | password_hash | text | NOT NULL (argon2id) |
 | rol | text | CHECK IN (`ADMIN`,`CAJERO`,`COCINA`) |
 | activo | boolean | DEFAULT true |
@@ -57,9 +57,9 @@ erDiagram
 
 | Columna | Tipo | Restricciones |
 |---|---|---|
-| id | uuid | PK |
+| id | uuid | PK (generado en app con UUID v7) |
 | usuario_id | uuid | FK → usuario |
-| token_hash | bytea | UNIQUE NOT NULL (SHA-256 del token de la cookie) |
+| token_hash | text | UNIQUE NOT NULL (SHA-256 en formato hex del token de la cookie) |
 | expira_at | timestamptz | NOT NULL, índice |
 | ultimo_uso_at | timestamptz | |
 | user_agent, ip | text | |
