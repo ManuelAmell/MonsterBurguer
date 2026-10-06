@@ -147,3 +147,45 @@ Mediciones extraídas mediante la API de DOM / DevTools en el viewport operativo
 El kit de componentes presentacionales es de una calidad sobresaliente a nivel de diseño, tokens, contraste y ergonomía visual. Sin embargo, para mantener el rigor del estándar de ingeniería definido en `CLAUDE.md` ("Sin any"), **no es posible aprobar la entrega hasta que se corrijan los hallazgos HALLAZGO-01 y HALLAZGO-02**.
 
 Una vez el autor reemplace las 6 ocurrencias de `any` por sus tipos estrictos correspondientes, el kit estará listo para ser aprobado inmediatamente.
+
+
+---
+
+## Re-verificación (ac0ee06)
+
+- **Fecha:** 2026-10-06
+- **Rama:** `ManuelAmell/mvp-uikit`
+- **Commit evaluado:** `ac0ee06e0e48ed28bc44b10adc65dd9701688bda` (`ac0ee06`)
+- **Rol:** Verificador Independiente de UI/UX
+- **Veredicto:** **APROBADO** ✅ (Todos los hallazgos previos fueron corregidos sin introducir regresiones funcionales ni estéticas).
+
+### 1. Resumen Ejecutivo de la Re-verificación
+
+Se realizó una segunda auditoría exhaustiva, técnica y visual sobre el commit `ac0ee06`, enfocado en subsanar los hallazgos documentados en la evaluación inicial (`70c9af8`).
+
+Se comprobó que:
+1. **HALLAZGO-01 [MAYOR] (Resuelto):** La interfaz pública de `ToggleGroup` eliminó completamente el tipo `any` en su prop de callback mediante una unión discriminada estricta (`ToggleGroupSingleProps` con `onValueChange?: (value: string) => void` y `ToggleGroupMultipleProps` con `onValueChange?: (value: string[]) => void`). Las pruebas estáticas con TypeScript confirmaron la correcta inferencia y el rechazo de firmas incompatibles.
+2. **HALLAZGO-02 [MAYOR] (Resuelto):** Se erradicó el tipado `: any` en los manejadores de eventos `onClick` de `AlertDialogTrigger`, `DialogTrigger`, `DialogClose`, `SheetTrigger` y `SheetClose`, reemplazándolo por `MouseEvent<HTMLButtonElement>`.
+3. **HALLAZGO-03 [MENOR] (Resuelto):** El botón de cierre (X) en `DialogContent` y `SheetContent` fue ampliado de `size-11` (44×44 px) a `size-12` (48×48 px), alcanzando la pauta táctil requerida de ≥ 48 px estipulada en `DESIGN.md` §1.
+4. **Calidad y Regresiones:** El escaneo estático de `apps/web/src` arrojó 0 ocurrencias de `any`. Las herramientas de compilación (`eslint`, `typecheck`, `build`) pasaron en verde con exit code 0. En la verificación en navegador real con Chrome DevTools (perfil aislado), los modales abren y cierran limpiamente tanto con puntero como por teclado, y no se detectaron regresiones visuales ni de contraste.
+
+---
+
+### 2. Tabla de Comprobaciones
+
+| # | Criterio de Verificación | Estado | Evidencia y Mediciones |
+|---|---|:---:|---|
+| **1** | **Alcance del Git Diff** (`git diff 70c9af8..ac0ee06 --stat`) | **CONFORME** | Cambios limitados exclusivamente al kit de UI: 4 componentes modificados (`alert-dialog.tsx`, `dialog.tsx`, `sheet.tsx`, `toggle-group.tsx`), limpieza de 5 imports no utilizados en `vitrina-page.tsx`, y el informe de verificación previo. Cero modificaciones de comportamiento ajenas a los hallazgos. |
+| **2** | **Erradicación de `any`** (`grep -rnE ":\s*any\b\|as any\|<any>\|any\[\]" apps/web/src`) | **CONFORME** | **0 ocurrencias detectadas** en todo el directorio `apps/web/src`. El grep devolvió código de salida 1 (vacío). |
+| **3** | **Tooling y Compilación** | **CONFORME** | • `pnpm exec eslint apps/web/src` → Exit code 0 (0 errores, 0 advertencias).<br>• `pnpm --filter web typecheck` → Exit code 0 (`tsc --noEmit` sin errores).<br>• `pnpm --filter web build` → Exit code 0 (bundle generado en 1.90s). |
+| **4** | **Resolución HALLAZGO-01 y HALLAZGO-02** | **CONFORME** | • Tipos estrictos en `ToggleGroupProps` verificados con pruebas tipadas.<br>• Tipos `MouseEvent<HTMLButtonElement>` en disparadores y cierres de modales.<br>• Verificado en tiempo de ejecución: Dialog, AlertDialog, Sheet y ToggleGroup responden de forma precisa a eventos interactivos de puntero y teclado. |
+| **5** | **Resolución HALLAZGO-03 (Dimensiones de Botón X)** | **CONFORME** | Medición en navegador Chromium real mediante `getBoundingClientRect()`:<br>• `DialogContent` botón X: **48 × 48 px** (`size-12`), `aria-label="Cerrar diálogo"`, foco visible activo con ring de 3 px.<br>• `SheetContent` botón X: **48 × 48 px** (`size-12`), `aria-label="Cerrar panel lateral"`, foco visible activo con ring de 3 px. |
+| **6** | **Prueba de Regresión Visual y Contraste** | **CONFORME** | Verificación en viewport 1024 px sin scroll horizontal (`scrollWidth <= clientWidth`). Muestreo de 3 componentes principales:<br>1. `ProductTile`: altura 112 px (clase `h-28`, spec 96–120 px) ✅<br>2. `TicketLine` Stepper (− / +): 44 × 44 px (spec 44 px) ✅<br>3. `NumericKeypad` teclas numéricas: 106.1 × 64 px (clase `h-16`, spec 64 px) ✅<br>Ratios de contraste: Botón primario 7.05:1 (WCAG AA), Tarjetas 16.74:1 (WCAG AAA). |
+
+---
+
+### 3. Veredicto Final
+
+**ESTADO: APROBADO ✅**
+
+El kit de componentes presentacionales en la rama `ManuelAmell/mvp-uikit` cumple cabalmente con la especificación de `DESIGN.md`, los estándares de calidad de `CLAUDE.md` y todos los criterios de aceptación del Hito MVP.
