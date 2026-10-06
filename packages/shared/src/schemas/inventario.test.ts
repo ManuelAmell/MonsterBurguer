@@ -7,6 +7,7 @@ import {
   editarIngredienteSchema,
   ingredienteSchema,
   kardexRespuestaSchema,
+  listarIngredientesQuerySchema,
   movimientoInventarioSchema,
 } from './inventario';
 
@@ -216,6 +217,28 @@ describe('schemas/inventario', () => {
         nextCursor: null,
       });
       expect(kardex.items).toHaveLength(1);
+    });
+  });
+
+  describe('listarIngredientesQuerySchema', () => {
+    it('valida query params con filtro stockBajo y paginación', () => {
+      const q = listarIngredientesQuerySchema.parse({
+        stockBajo: 'true',
+        limit: '25',
+      });
+      expect(q).toEqual({
+        stockBajo: true,
+        limit: 25,
+      });
+    });
+
+    it('acepta stockBajo=false y query vacía por defecto', () => {
+      const q1 = listarIngredientesQuerySchema.parse({ stockBajo: 'false' });
+      expect(q1.stockBajo).toBe(false);
+
+      const q2 = listarIngredientesQuerySchema.parse({});
+      expect(q2.limit).toBe(50);
+      expect(q2.stockBajo).toBeUndefined();
     });
   });
 });
