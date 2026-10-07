@@ -72,10 +72,12 @@ export function CocinaPage() {
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt)); // FIFO
 
   const estadoConexion = stream.conectado
-    ? { icono: Wifi, texto: t.cocinaKds.conectado, clase: 'text-success' }
-    : stream.reconectando
-      ? { icono: WifiOff, texto: t.cocinaKds.reconectando, clase: 'text-warning' }
-      : { icono: WifiOff, texto: t.cocinaKds.desconectado, clase: 'text-muted-foreground' };
+    ? { icono: Wifi, texto: t.cocinaKds.conectado, clase: 'text-success', girar: false }
+    : stream.conectando
+      ? { icono: Loader2, texto: t.cocinaKds.conectando, clase: 'text-muted-foreground', girar: true }
+      : stream.reconectando
+        ? { icono: WifiOff, texto: t.cocinaKds.reconectando, clase: 'text-warning', girar: false }
+        : { icono: WifiOff, texto: t.cocinaKds.desconectado, clase: 'text-destructive', girar: false };
   const IconoConexion = estadoConexion.icono;
 
   return (
@@ -84,7 +86,7 @@ export function CocinaPage() {
         <Logo />
         <div className="flex items-center gap-4">
           <span role="status" className={cn('flex items-center gap-1.5 text-sm font-semibold', estadoConexion.clase)}>
-            <IconoConexion aria-hidden="true" className="size-4" />
+            <IconoConexion aria-hidden="true" className={cn('size-4', estadoConexion.girar && 'animate-spin')} />
             {estadoConexion.texto}
           </span>
           <span className="hidden text-muted-foreground sm:inline">{usuario?.nombre}</span>

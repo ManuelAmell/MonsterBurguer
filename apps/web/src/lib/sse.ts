@@ -17,6 +17,7 @@ export interface UseEventStreamOpciones {
 export interface UseEventStreamResultado {
   estado: EstadoConexionSse;
   conectado: boolean;
+  conectando: boolean;
   reconectando: boolean;
   error: Event | null;
 }
@@ -24,7 +25,7 @@ export interface UseEventStreamResultado {
 /**
  * Hook para conectarse al flujo SSE del backend (`/api/v1/stream?canales=...`).
  * - Invalida queries de TanStack Query según el mapa de docs/API.md.
- * - Expone el estado de conexión (`conectado`, `reconectando`).
+ * - Expone el estado de conexión (`conectado`, `conectando`, `reconectando`).
  * - Se limpia al desmontar cerrando limpio el EventSource.
  */
 export function useEventStream(
@@ -32,10 +33,9 @@ export function useEventStream(
   opciones?: UseEventStreamOpciones,
 ): UseEventStreamResultado {
   const queryClient = useQueryClient();
-  const [estado, setEstado] = useState<EstadoConexionSse>('desconectado');
-  const [error, setError] = useState<Event | null>(null);
-
   const habilitado = opciones?.habilitado ?? true;
+  const [estado, setEstado] = useState<EstadoConexionSse>(() => (habilitado ? 'conectando' : 'desconectado'));
+  const [error, setError] = useState<Event | null>(null);
   const onEvento = opciones?.onEvento;
   const onEventoRef = useRef(onEvento);
 
@@ -61,11 +61,6 @@ export function useEventStream(
     if (!habilitado || !canalesKey) {
       return;
     }
-
-    const timerConexion = setTimeout(() => {
-      setEstado('conectando');
-      setError(null);
-    }, 0);
 
     const url = `/api/v1/stream?canales=${encodeURIComponent(canalesKey)}`;
     const es = new EventSource(url, { withCredentials: true });
@@ -123,12 +118,11 @@ export function useEventStream(
     }
 
     return () => {
-      clearTimeout(timerConexion);
       for (const { tipo, handler } of listeners) {
         es.removeEventListener(tipo, handler);
       }
       es.close();
-      setEstado('desconectado');
+      setEstado('conectando');
     };
   }, [canalesKey, habilitado, queryClient]);
 
@@ -138,6 +132,7 @@ export function useEventStream(
   return {
     estado: estadoEfectivo,
     conectado: estadoEfectivo === 'conectado',
+    conectando: estadoEfectivo === 'conectando',
     reconectando: estadoEfectivo === 'reconectando',
     error,
   };

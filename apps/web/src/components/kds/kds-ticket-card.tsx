@@ -103,7 +103,7 @@ export function KdsTicketCard({
             {tipo === 'MESA' ? (
               <>
                 <MapPin className="size-3.5" aria-hidden="true" />
-                <span>{mesa ? `Mesa ${mesa}` : 'Mesa'}</span>
+                <span>{typeof mesa === 'number' ? `Mesa ${mesa}` : (mesa ?? 'Mesa')}</span>
               </>
             ) : (
               <>

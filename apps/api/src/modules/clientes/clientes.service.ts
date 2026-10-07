@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import type { BuscarClientesQuery, CrearClienteInput } from '@mb/shared';
+import { esViolacionUnicidad } from '../../shared-kernel/db/db';
 import { DomainError } from '../../shared-kernel/errors/domain-error';
 import { nuevoId } from '../../shared-kernel/ids';
 import { ClientesRepository, type ClienteFila } from './clientes.repository';
@@ -30,12 +31,7 @@ export class ClientesService {
         email: input.email ? input.email.trim() : null,
       });
     } catch (err: unknown) {
-      if (
-        typeof err === 'object' &&
-        err !== null &&
-        'code' in err &&
-        err.code === '23505'
-      ) {
+      if (esViolacionUnicidad(err)) {
         throw new DomainError(
           'TELEFONO_DUPLICADO',
           'Ya existe un cliente con este teléfono.',

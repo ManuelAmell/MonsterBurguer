@@ -17,3 +17,6 @@ export function crearPool(connectionString: string, max = 20): Pool {
 export function crearDb(pool: Pool): Db {
   return drizzle({ client: pool, casing: 'snake_case' });
 }
+
+export * from './pg-error';
+

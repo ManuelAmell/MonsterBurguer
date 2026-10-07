@@ -39,6 +39,13 @@ POS para restaurante (hamburguesería). Monorepo TypeScript: NestJS 12 + Drizzle
 
 Quien orquesta (Claude principal) es responsable del resultado. Cada tarea que se delega a un subagente (Claude Sonnet/Opus vía Agent, o agy/Codex vía Orca) cumple esto:
 
+### 0. Agente y modelo por defecto
+
+- **Por defecto**, cada subagente orquestado es **agy (Antigravity) con el modelo `gemini-3.8-flash-high`** (Gemini 3.8 Flash, High), lanzado vía Orca:
+  `orca orchestration worker-start --agent antigravity --model gemini-3.8-flash-high --spec "<tarea>" --worktree <...> --timeout-ms 240000 --json`
+- Solo se usa otro agente, proveedor o modelo cuando el usuario lo indica explícitamente. Por ejemplo, "usa Sonnet" (Agent con `model: sonnet`) o "usa Codex". La indicación vale para esa tarea, no cambia el valor por defecto.
+- Si `gemini-3.8-flash-high` no está disponible o agy agotó su cuota, se le informa al usuario y se le pregunta qué usar. No se cambia de modelo ni de agente por cuenta propia. Los modelos disponibles se listan con `agy models`.
+
 ### 1. Instrucciones detalladas: el subagente no asume nada
 
 El prompt debe ser autosuficiente. El subagente no ve esta conversación. Incluye siempre:

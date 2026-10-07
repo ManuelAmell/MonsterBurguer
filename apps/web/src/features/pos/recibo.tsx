@@ -52,7 +52,7 @@ export function ReciboDialog({ exito, onCerrar }: { exito: CobroExitoso; onCerra
             {formatearFechaHora(recibo?.createdAt ?? new Date().toISOString())}
           </p>
           <p className="text-center">
-            {t.pos.recibo.pedido} #{pedido.numeroDia} · {mesa ? `${t.pos.recibo.mesa} ${mesa}` : t.pos.recibo.llevar}
+            {t.pos.recibo.pedido} #{pedido.numeroDia} · {mesa ?? t.pos.recibo.llevar}
           </p>
           {(recibo?.cajeroNombre ?? recibo?.cajero) && (
             <p className="text-center">

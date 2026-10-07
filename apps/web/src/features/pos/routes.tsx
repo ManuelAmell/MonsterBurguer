@@ -11,4 +11,12 @@ export const posRoutes: RouteObject[] = [
       </RequiereRol>
     ),
   },
+  {
+    path: 'pos/pedido/:id',
+    element: (
+      <RequiereRol roles={['ADMIN', 'CAJERO']}>
+        <PosPage />
+      </RequiereRol>
+    ),
+  },
 ];

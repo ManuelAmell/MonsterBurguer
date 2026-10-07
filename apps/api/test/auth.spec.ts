@@ -16,6 +16,7 @@ describe.skipIf(!DATABASE_URL_TEST)('identidad: login, sesión y logout (HU-01)'
   let app: INestApplication;
   let db: Db;
   let base: string;
+  let cookieAdmin: string;
 
   beforeAll(async () => {
     const url = DATABASE_URL_TEST as string;
@@ -55,7 +56,9 @@ describe.skipIf(!DATABASE_URL_TEST)('identidad: login, sesión y logout (HU-01)'
   });
 
   it('login válido entrega cookie HttpOnly y el usuario con su rol', async () => {
-    const { res, cookie } = await login('ADMIN', 'admin123'); // el username no distingue mayúsculas
+    const loginRes = await login('ADMIN', 'admin123'); // el username no distingue mayúsculas
+    cookieAdmin = loginRes.cookie;
+    const { res, cookie } = loginRes;
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ usuario: { username: 'admin', rol: 'ADMIN' } });
     const setCookie = res.headers.get('set-cookie') ?? '';
@@ -103,6 +106,41 @@ describe.skipIf(!DATABASE_URL_TEST)('identidad: login, sesión y logout (HU-01)'
     });
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ codigo: 'ORIGEN_NO_PERMITIDO' });
+  });
+
+  it('MEN-02: rechaza peticiones mutantes sin Origin ni Referer con 403 ORIGEN_NO_PERMITIDO', async () => {
+    const res = await fetch(`${base}/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ codigo: 'ORIGEN_NO_PERMITIDO' });
+  });
+
+  it('MEN-02: rechaza peticiones mutantes con Referer de otro origen con 403 ORIGEN_NO_PERMITIDO', async () => {
+    const res = await fetch(`${base}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        referer: 'https://evil.example/login',
+      },
+      body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ codigo: 'ORIGEN_NO_PERMITIDO' });
+  });
+
+  it('MEN-02: acepta peticiones mutantes con Referer cuyo origen coincide con APP_ORIGIN cuando falta Origin', async () => {
+    const res = await fetch(`${base}/auth/logout`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        referer: `${ORIGEN}/pos`,
+        cookie: cookieAdmin,
+      },
+    });
+    expect(res.status).toBe(204);
   });
 
   it('logout invalida la sesión en el servidor', async () => {

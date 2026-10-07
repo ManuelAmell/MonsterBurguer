@@ -21,20 +21,42 @@ export function opcionesCookie(env: Env, maxAgeMs: number) {
   };
 }
 
-/** Defensa CSRF complementaria a SameSite=Strict: rechaza métodos mutantes desde otro origen. */
+function origenDesdeReferer(referer: string | string[] | undefined): string | null {
+  if (!referer) return null;
+  const valor = Array.isArray(referer) ? referer[0] : referer;
+  if (!valor) return null;
+  try {
+    return new URL(valor).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** Defensa CSRF complementaria a SameSite=Strict: exige Origin o Referer con mismo origen en métodos mutantes. */
 @Injectable()
 export class OrigenGuard implements CanActivate {
   constructor(@Inject(ENV) private readonly env: Env) {}
 
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<RequestConUsuario>();
-    const origen = req.headers.origin;
-    if (METODOS_MUTANTES.has(req.method) && origen && origen !== this.env.APP_ORIGIN) {
-      throw new DomainError(
-        CODIGOS_ERROR.ORIGEN_NO_PERMITIDO,
-        'Origen no permitido.',
-        HttpStatus.FORBIDDEN,
-      );
+    if (METODOS_MUTANTES.has(req.method)) {
+      const origenHeader = req.headers.origin;
+      const origen = Array.isArray(origenHeader) ? origenHeader[0] : origenHeader;
+
+      let permitido = false;
+      if (origen) {
+        permitido = origen === this.env.APP_ORIGIN;
+      } else if (req.headers.referer) {
+        permitido = origenDesdeReferer(req.headers.referer) === this.env.APP_ORIGIN;
+      }
+
+      if (!permitido) {
+        throw new DomainError(
+          CODIGOS_ERROR.ORIGEN_NO_PERMITIDO,
+          'Origen no permitido.',
+          HttpStatus.FORBIDDEN,
+        );
+      }
     }
     return true;
   }

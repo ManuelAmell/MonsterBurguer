@@ -1,6 +1,6 @@
 import { HttpStatus, Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import type { Unidad } from '@mb/shared';
-import { DB, type Db, type Executor } from '../../shared-kernel/db/db';
+import { DB, esViolacionUnicidad, type Db, type Executor } from '../../shared-kernel/db/db';
 import { DomainError } from '../../shared-kernel/errors/domain-error';
 import { EventBus } from '../../shared-kernel/events/event-bus';
 import { nuevoId } from '../../shared-kernel/ids';
@@ -56,7 +56,7 @@ export class CatalogoService implements OnModuleInit {
         activa: datos.activa,
       });
     } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes('unique')) {
+      if (esViolacionUnicidad(err)) {
         throw new DomainError(
           'NOMBRE_DUPLICADO',
           'Ya existe una categoría con ese nombre.',
@@ -79,7 +79,7 @@ export class CatalogoService implements OnModuleInit {
       if (!actualizada) throw DomainError.noEncontrado('Categoría no encontrada.');
       return actualizada;
     } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes('unique')) {
+      if (esViolacionUnicidad(err)) {
         throw new DomainError(
           'NOMBRE_DUPLICADO',
           'Ya existe una categoría con ese nombre.',
@@ -154,7 +154,7 @@ export class CatalogoService implements OnModuleInit {
         orden: datos.orden,
       });
     } catch (err: unknown) {
-      if (err instanceof Error && (err.message.includes('unique') || err.message.includes('lower'))) {
+      if (esViolacionUnicidad(err)) {
         throw new DomainError(
           'NOMBRE_DUPLICADO',
           'Ya existe un producto con ese nombre.',
@@ -190,7 +190,7 @@ export class CatalogoService implements OnModuleInit {
       if (!actualizado) throw DomainError.noEncontrado('Producto no encontrado.');
       return actualizado;
     } catch (err: unknown) {
-      if (err instanceof Error && (err.message.includes('unique') || err.message.includes('lower'))) {
+      if (esViolacionUnicidad(err)) {
         throw new DomainError(
           'NOMBRE_DUPLICADO',
           'Ya existe un producto con ese nombre.',

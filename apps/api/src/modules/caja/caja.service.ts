@@ -14,7 +14,7 @@ import {
   leerRegimen,
 } from '../../shared-kernel/configuracion/configuracion.lector';
 import { TASA_IMPUESTO_BP } from '@mb/shared';
-import { DB, type Db, type Executor } from '../../shared-kernel/db/db';
+import { DB, esViolacionUnicidad, type Db, type Executor } from '../../shared-kernel/db/db';
 import { DomainError } from '../../shared-kernel/errors/domain-error';
 import { EventBus } from '../../shared-kernel/events/event-bus';
 import { nuevoId } from '../../shared-kernel/ids';
@@ -22,12 +22,6 @@ import { PedidosService } from '../pedidos/pedidos.public';
 import { pago, recibo, sesionCaja } from './caja.schema';
 
 type SesionFila = typeof sesionCaja.$inferSelect;
-
-function codigoPg(err: unknown): string | undefined {
-  if (typeof err !== 'object' || err === null) return undefined;
-  if ('code' in err && typeof err.code === 'string') return err.code;
-  return 'cause' in err ? codigoPg(err.cause) : undefined;
-}
 
 export const formatoNumeroRecibo = (n: number): string => `R-${String(n).padStart(6, '0')}`;
 
@@ -63,7 +57,7 @@ export class CajaService {
         .returning();
       return this.mapearSesion(fila!);
     } catch (err: unknown) {
-      if (codigoPg(err) === '23505') {
+      if (esViolacionUnicidad(err)) {
         throw new DomainError(
           'SESION_YA_ABIERTA',
           'Ya tienes una sesión de caja abierta (RN-40).',

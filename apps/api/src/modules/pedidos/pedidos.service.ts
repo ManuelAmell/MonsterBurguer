@@ -19,7 +19,7 @@ import {
   leerHoraCorte,
   leerTasaImpuestoBp,
 } from '../../shared-kernel/configuracion/configuracion.lector';
-import { DB, type Db, type Executor, type Tx } from '../../shared-kernel/db/db';
+import { DB, esViolacionUnicidad, type Db, type Executor, type Tx } from '../../shared-kernel/db/db';
 import { DomainError } from '../../shared-kernel/errors/domain-error';
 import { EventBus } from '../../shared-kernel/events/event-bus';
 import { nuevoId } from '../../shared-kernel/ids';
@@ -33,12 +33,6 @@ import {
   type PedidoFila,
   type PedidoItemFila,
 } from './pedidos.repository';
-
-function codigoPg(err: unknown): string | undefined {
-  if (typeof err !== 'object' || err === null) return undefined;
-  if ('code' in err && typeof err.code === 'string') return err.code;
-  return 'cause' in err ? codigoPg(err.cause) : undefined;
-}
 
 export interface PedidoParaCobro {
   id: string;
@@ -105,7 +99,7 @@ export class PedidosService {
         return nuevoPedidoId;
       })
       .catch((err: unknown) => {
-        if (codigoPg(err) === '23505') {
+        if (esViolacionUnicidad(err)) {
           throw new DomainError(
             'MESA_OCUPADA',
             'La mesa ya tiene un pedido activo.',
@@ -376,7 +370,7 @@ export class PedidosService {
       });
       return this.mapearMesa(fila);
     } catch (err: unknown) {
-      if (codigoPg(err) === '23505') {
+      if (esViolacionUnicidad(err)) {
         throw new DomainError(
           'MESA_DUPLICADA',
           `Ya existe una mesa con el nombre "${input.nombre}".`,

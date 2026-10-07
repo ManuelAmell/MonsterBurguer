@@ -2,7 +2,7 @@ import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import type { TipoMovimientoInventario, Unidad } from '@mb/shared';
 import { configuracion } from '../../shared-kernel/configuracion/configuracion.schema';
-import { DB, type Db, type Executor, type Tx } from '../../shared-kernel/db/db';
+import { DB, esViolacionUnicidad, type Db, type Executor, type Tx } from '../../shared-kernel/db/db';
 import { DomainError } from '../../shared-kernel/errors/domain-error';
 import { EventBus } from '../../shared-kernel/events/event-bus';
 import { nuevoId } from '../../shared-kernel/ids';
@@ -66,7 +66,7 @@ export class InventarioService {
         activo: datos.activo,
       });
     } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes('unique')) {
+      if (esViolacionUnicidad(err)) {
         throw new DomainError(
           'NOMBRE_DUPLICADO',
           'Ya existe un ingrediente con ese nombre.',
@@ -94,7 +94,7 @@ export class InventarioService {
       if (!actualizado) throw DomainError.noEncontrado('Ingrediente no encontrado.');
       return actualizado;
     } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes('unique')) {
+      if (esViolacionUnicidad(err)) {
         throw new DomainError(
           'NOMBRE_DUPLICADO',
           'Ya existe un ingrediente con ese nombre.',

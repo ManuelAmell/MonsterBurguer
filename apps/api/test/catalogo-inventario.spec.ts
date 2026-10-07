@@ -23,6 +23,7 @@ describe.skipIf(!DATABASE_URL_TEST)('Hito 1: Catálogo e Inventario (RN-30 a RN-
   let catalogoService: CatalogoService;
   let inventarioService: InventarioService;
   let adminUsuarioId: string;
+  let catHamburguesasId: string;
 
   let cookieAdmin: string;
   let cookieCajero: string;
@@ -158,7 +159,6 @@ describe.skipIf(!DATABASE_URL_TEST)('Hito 1: Catálogo e Inventario (RN-30 a RN-
 
   // --- 2. Catálogo, Productos y Recetas (RN-30, RN-31, RN-01, RN-02) ---
   describe('RN-30 y RN-31: CRUD de catálogo, categorías, productos y recetas', () => {
-    let catHamburguesasId: string;
     let prodClasicaId: string;
     let ingPanId: string;
     let ingCarneId: string;
@@ -721,6 +721,132 @@ describe.skipIf(!DATABASE_URL_TEST)('Hito 1: Catálogo e Inventario (RN-30 a RN-
         const stockActual = Number(ing.stockActual);
         expect(stockActual).toBe(sumaMovimientos);
       }
+    });
+  });
+
+  // --- 9. BE-01: Control de duplicados en Catálogo e Inventario ---
+  describe('BE-01: control de unicidad responde 409 NOMBRE_DUPLICADO ante nombres duplicados', () => {
+    it('BE-01: nombre de categoría duplicado responde 409 NOMBRE_DUPLICADO al crear', async () => {
+      // 'Hamburguesas' ya fue creada en la suite
+      const res = await post('/categorias', { nombre: 'Hamburguesas' }, cookieAdmin);
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({
+        codigo: 'NOMBRE_DUPLICADO',
+        mensaje: 'Ya existe una categoría con ese nombre.',
+      });
+    });
+
+    it('BE-01: nombre de categoría duplicado responde 409 NOMBRE_DUPLICADO al renombrar', async () => {
+      const resCat = await post('/categorias', { nombre: 'Bebidas BE01' }, cookieAdmin);
+      expect(resCat.status).toBe(201);
+      const cat = (await resCat.json()) as { id: string };
+
+      const resDuplicado = await patch(`/categorias/${cat.id}`, { nombre: 'Hamburguesas' }, cookieAdmin);
+      expect(resDuplicado.status).toBe(409);
+      expect(await resDuplicado.json()).toMatchObject({
+        codigo: 'NOMBRE_DUPLICADO',
+        mensaje: 'Ya existe una categoría con ese nombre.',
+      });
+    });
+
+    it('BE-01: nombre de producto duplicado responde 409 NOMBRE_DUPLICADO al crear', async () => {
+      // 'Monster Clásica' ya fue creada. Probamos duplicado exacto e insensible a mayúsculas
+      const resExacto = await post(
+        '/productos',
+        {
+          categoriaId: catHamburguesasId,
+          nombre: 'Monster Clásica',
+          precio: 26000,
+        },
+        cookieAdmin,
+      );
+      expect(resExacto.status).toBe(409);
+      expect(await resExacto.json()).toMatchObject({
+        codigo: 'NOMBRE_DUPLICADO',
+        mensaje: 'Ya existe un producto con ese nombre.',
+      });
+
+      const resCaseInsensitive = await post(
+        '/productos',
+        {
+          categoriaId: catHamburguesasId,
+          nombre: 'monster clásica',
+          precio: 26000,
+        },
+        cookieAdmin,
+      );
+      expect(resCaseInsensitive.status).toBe(409);
+      expect(await resCaseInsensitive.json()).toMatchObject({
+        codigo: 'NOMBRE_DUPLICADO',
+        mensaje: 'Ya existe un producto con ese nombre.',
+      });
+    });
+
+    it('BE-01: nombre de producto duplicado responde 409 NOMBRE_DUPLICADO al renombrar', async () => {
+      const resProd = await post(
+        '/productos',
+        {
+          categoriaId: catHamburguesasId,
+          nombre: 'Producto Temporal BE01',
+          precio: 20000,
+        },
+        cookieAdmin,
+      );
+      expect(resProd.status).toBe(201);
+      const prod = (await resProd.json()) as { id: string };
+
+      const resDuplicado = await patch(
+        `/productos/${prod.id}`,
+        { nombre: 'Monster Clásica' },
+        cookieAdmin,
+      );
+      expect(resDuplicado.status).toBe(409);
+      expect(await resDuplicado.json()).toMatchObject({
+        codigo: 'NOMBRE_DUPLICADO',
+        mensaje: 'Ya existe un producto con ese nombre.',
+      });
+    });
+
+    it('BE-01: nombre de ingrediente duplicado responde 409 NOMBRE_DUPLICADO al crear', async () => {
+      // 'Pan Hamburguesa' ya fue creado
+      const res = await post(
+        '/ingredientes',
+        {
+          nombre: 'Pan Hamburguesa',
+          unidad: 'UND',
+          stockMinimo: 5,
+        },
+        cookieAdmin,
+      );
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({
+        codigo: 'NOMBRE_DUPLICADO',
+        mensaje: 'Ya existe un ingrediente con ese nombre.',
+      });
+    });
+
+    it('BE-01: nombre de ingrediente duplicado responde 409 NOMBRE_DUPLICADO al renombrar', async () => {
+      const resIng = await post(
+        '/ingredientes',
+        {
+          nombre: 'Ingrediente Temporal BE01',
+          unidad: 'G',
+        },
+        cookieAdmin,
+      );
+      expect(resIng.status).toBe(201);
+      const ing = (await resIng.json()) as { id: string };
+
+      const resDuplicado = await patch(
+        `/ingredientes/${ing.id}`,
+        { nombre: 'Pan Hamburguesa' },
+        cookieAdmin,
+      );
+      expect(resDuplicado.status).toBe(409);
+      expect(await resDuplicado.json()).toMatchObject({
+        codigo: 'NOMBRE_DUPLICADO',
+        mensaje: 'Ya existe un ingrediente con ese nombre.',
+      });
     });
   });
 });

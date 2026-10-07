@@ -12,7 +12,7 @@ Tiempo real: `GET /api/v1/stream` (`Content-Type: text/event-stream`)
 ## 1. Convenciones Globales
 
 - **Autenticación:** Cookie de sesión `mb_session` (`HttpOnly`, `SameSite=Strict`).
-- **Seguridad y CSRF:** En métodos mutantes (`POST`, `PATCH`, `PUT`, `DELETE`), el backend valida que la cabecera `Origin` coincida con la variable de entorno `APP_ORIGIN` (o peticiones de mismo origen / health check).
+- **Seguridad y CSRF:** En métodos mutantes (`POST`, `PATCH`, `PUT`, `DELETE`), el backend exige que la cabecera `Origin` coincida con la variable de entorno `APP_ORIGIN` o, si no está presente, que la cabecera `Referer` provenga del mismo origen. Peticiones mutantes sin `Origin` ni `Referer` válido son rechazadas con `403 ORIGEN_NO_PERMITIDO`.
 - **Control de Acceso Basado en Roles (RBAC):**
   - **`ADMIN`:** Acceso total a administración, catálogo, inventario, pedidos, caja y cocina.
   - **`CAJERO`:** Acceso a toma de pedidos, catálogo de menú, gestión de mesas, cobro y apertura/cierre de su propia caja.
@@ -55,11 +55,12 @@ Cualquier fallo de negocio, validación o autorización devuelve la estructura d
 |---|---|---|
 | `400 Bad Request` | `VALIDACION` | Datos de entrada no cumplen el esquema Zod (`detalles` contiene arreglo de fallos por campo). |
 | `401 Unauthorized` | `NO_AUTENTICADO` / `CREDENCIALES_INVALIDAS` | Ausencia de cookie `mb_session`, sesión expirada o usuario/clave erróneos. |
-| `403 Forbidden` | `SIN_PERMISO` / `ORIGEN_NO_PERMITIDO` | Rol insuficiente para la acción o cabecera `Origin` no coincide con `APP_ORIGIN`. |
+| `403 Forbidden` | `SIN_PERMISO` / `ORIGEN_NO_PERMITIDO` | Rol insuficiente para la acción o cabecera `Origin`/`Referer` no coincide con `APP_ORIGIN` (o ausente en métodos mutantes). |
 | `404 Not Found` | `NO_ENCONTRADO` | El recurso solicitado por ID no existe en la base de datos. |
 | `409 Conflict` | `ESTADO_INVALIDO` | Transición de estado prohibida por la máquina de estados del pedido o comanda. |
 | `409 Conflict` | `VERSION_CONFLICT` | Conflicto de bloqueo optimista; la versión enviada no coincide con la versión en base de datos. |
 | `409 Conflict` | `STOCK_INSUFICIENTE` | Falta stock en uno o más ingredientes al confirmar el pedido (RN-33). |
+| `409 Conflict` | `NOMBRE_DUPLICADO` | Nombre duplicado al crear o renombrar categoría, producto o ingrediente (BE-01). |
 | `409 Conflict` | `CAJA_NO_ABIERTA` | El cajero intenta cobrar sin una sesión de caja activa en estado `ABIERTA` (RN-40). |
 | `409 Conflict` | `PAGOS_NO_CUADRAN` | El monto pagado difiere de `total + propina` (RN-43). |
 | `429 Too Many Requests` | `DEMASIADOS_INTENTOS` | Límite de peticiones excedido (máximo 5 intentos por minuto en login). |

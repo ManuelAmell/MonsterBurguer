@@ -1,6 +1,7 @@
 import { Minus, Plus, StickyNote, Trash2 } from 'lucide-react';
 import type { ComponentProps } from 'react';
 import { formatearCOP } from '@mb/shared';
+import { t } from '@/i18n/es';
 import { cn } from '@/lib/utils';
 
 export interface TicketLineProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -51,7 +52,7 @@ export function TicketLine({
         <div className="flex flex-col">
           <span className="text-sm font-bold text-foreground leading-snug">{nombre}</span>
           <span className="tabular text-xs text-muted-foreground">
-            {formatearCOP(precioUnitario)} c/u
+            {t.pos.ticketPrecioUnitario(formatearCOP(precioUnitario))}
           </span>
         </div>
         <span className="tabular text-base font-bold text-foreground">
@@ -73,7 +74,7 @@ export function TicketLine({
         <div className="inline-flex items-center rounded-lg border bg-secondary/50 p-0.5">
           <button
             type="button"
-            aria-label={`Disminuir cantidad de ${nombre}`}
+            aria-label={t.pos.ticketDisminuir(nombre)}
             disabled={cantidad <= 1}
             onClick={onDecrementar}
             className="flex size-11 items-center justify-center rounded-md text-foreground transition-[color,transform] hover:bg-card hover:text-primary active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring"
@@ -90,7 +91,7 @@ export function TicketLine({
 
           <button
             type="button"
-            aria-label={`Aumentar cantidad de ${nombre}`}
+            aria-label={t.pos.ticketAumentar(nombre)}
             onClick={onIncrementar}
             className="flex size-11 items-center justify-center rounded-md text-foreground transition-[color,transform] hover:bg-card hover:text-primary active:scale-[0.97] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring"
           >
@@ -103,7 +104,7 @@ export function TicketLine({
           {onEditarNota && (
             <button
               type="button"
-              aria-label={nota ? `Editar nota de ${nombre}` : `Agregar nota a ${nombre}`}
+              aria-label={nota ? t.pos.ticketAriaEditar(nombre) : t.pos.ticketAriaAgregar(nombre)}
               onClick={onEditarNota}
               className={cn(
                 'flex h-11 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-[color,background-color,transform] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring',
@@ -113,13 +114,13 @@ export function TicketLine({
               )}
             >
               <StickyNote className="size-4" aria-hidden="true" />
-              <span>{nota ? 'Editar nota' : 'Nota'}</span>
+              <span>{nota ? t.pos.ticketEditarNota : t.pos.ticketNota}</span>
             </button>
           )}
 
           <button
             type="button"
-            aria-label={`Eliminar ${nombre} del pedido`}
+            aria-label={t.pos.ticketEliminar(nombre)}
             onClick={onEliminar}
             className="flex size-11 items-center justify-center rounded-lg text-destructive transition-[color,background-color,transform] hover:bg-destructive/15 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring"
           >

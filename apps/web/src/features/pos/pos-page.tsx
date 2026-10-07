@@ -1,5 +1,6 @@
-import { AlertCircle, Loader2, ShoppingCart, UtensilsCrossed } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { AlertCircle, Loader2, Plus, ReceiptText, ShoppingCart, StickyNote, UtensilsCrossed } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { formatearCOP, type Pedido, type TipoPedido } from '@mb/shared';
@@ -24,6 +25,8 @@ import { useEventStream } from '@/hooks/use-event-stream';
 import { t } from '@/i18n/es';
 import { ApiError } from '@/lib/api';
 import { CobroDialog, type CobroExitoso } from './cobro-dialog';
+import { NotaItemDialog } from './nota-item-dialog';
+import { PedidosActivosDialog } from './pedidos-activos-dialog';
 import {
   claves,
   extraerFaltantes,
@@ -34,26 +37,34 @@ import {
   useMenu,
   useMesas,
   usePedido,
+  usePedidosActivos,
   useQuitarItem,
   type FaltanteStock,
 } from './queries';
 import { ReciboDialog } from './recibo';
 
-/** POS — venta (DESIGN §7.2). El pedido vive en el servidor; aquí solo se guarda su id. */
+/** POS — venta (DESIGN §7.2). El pedido vive en el servidor; su id deriva de la URL (/pos/pedido/:id). */
 export function PosPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { id } = useParams<{ id?: string }>();
+  const pedidoId = id ?? null;
+
   useEventStream(['pos']);
 
   const menu = useMenu();
   const mesas = useMesas();
-  const [tipo, setTipo] = useState<TipoPedido>('MESA');
-  const [mesaId, setMesaId] = useState('');
-  const [pedidoId, setPedidoId] = useState<string | null>(null);
+  const pedidosActivosQ = usePedidosActivos();
+
+  const [tipoLocal, setTipoLocal] = useState<TipoPedido>('MESA');
+  const [mesaIdLocal, setMesaIdLocal] = useState('');
   const [categoriaSel, setCategoriaSel] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [faltantes, setFaltantes] = useState<FaltanteStock[] | null>(null);
   const [cobrando, setCobrando] = useState(false);
   const [exito, setExito] = useState<CobroExitoso | null>(null);
+  const [mostrarActivos, setMostrarActivos] = useState(false);
+  const [itemParaNota, setItemParaNota] = useState<{ id: string; nombre: string; nota: string } | null>(null);
 
   const pedidoQ = usePedido(pedidoId);
   const pedido = pedidoId ? pedidoQ.data : undefined;
@@ -62,6 +73,25 @@ export function PosPage() {
   const editar = useEditarItem();
   const quitar = useQuitarItem();
   const confirmar = useConfirmarPedido();
+
+  const tipo = pedido ? pedido.tipo : tipoLocal;
+  const mesaId = pedido ? (pedido.mesa?.id ?? '') : mesaIdLocal;
+
+  // Validación y redirección si el pedido no existe o ya está cerrado
+  useEffect(() => {
+    if (!pedidoId) return;
+
+    if (pedidoQ.isError) {
+      toast.error(t.pos.pedidoNoEncontrado);
+      navigate('/pos', { replace: true });
+      return;
+    }
+
+    if (pedido && pedido.estado === 'CERRADO') {
+      toast.info(t.pos.pedidoYaCerrado);
+      navigate('/pos', { replace: true });
+    }
+  }, [pedidoId, pedidoQ.isError, pedido, navigate]);
 
   // Serializa las operaciones para que toques rápidos no pisen versiones ni creen dos pedidos.
   const cola = useRef<Promise<unknown>>(Promise.resolve());
@@ -75,6 +105,7 @@ export function PosPage() {
   const categorias = menu.data ?? [];
   const categoriaActiva = categorias.find((c) => c.id === categoriaSel) ?? categorias[0];
   const mesasLibres = (mesas.data ?? []).filter((m) => !m.ocupada);
+  const pedidosActivos = pedidosActivosQ.data ?? [];
   const enEdicion = !pedido || pedido.estado === 'ABIERTO';
 
   function agregarProducto(productoId: string) {
@@ -85,18 +116,18 @@ export function PosPage() {
       return;
     }
     encolar(async () => {
-      let id = pedidoId;
-      if (!id) {
+      let currentId = pedidoId;
+      if (!currentId) {
         const nuevo = await crear.mutateAsync({ tipo, mesaId: tipo === 'MESA' ? mesaId : null });
-        id = nuevo.id;
-        setPedidoId(id);
+        currentId = nuevo.id;
+        navigate(`/pos/pedido/${currentId}`);
       }
-      const actual = qc.getQueryData<Pedido>(claves.detalle(id));
+      const actual = qc.getQueryData<Pedido>(claves.detalle(currentId));
       const linea = actual?.items.find((i) => i.productoId === productoId && !i.nota);
       if (linea && linea.cantidad < 99) {
-        await editar.mutateAsync({ pedidoId: id, itemId: linea.id, cantidad: linea.cantidad + 1 });
+        await editar.mutateAsync({ pedidoId: currentId, itemId: linea.id, cantidad: linea.cantidad + 1 });
       } else {
-        await agregar.mutateAsync({ pedidoId: id, productoId, cantidad: 1 });
+        await agregar.mutateAsync({ pedidoId: currentId, productoId, cantidad: 1 });
       }
     });
   }
@@ -104,21 +135,35 @@ export function PosPage() {
   function cambiarCantidad(itemId: string, cantidad: number) {
     if (!pedidoId || cantidad < 1 || cantidad > 99) return;
     setError(null);
-    const id = pedidoId;
-    encolar(() => editar.mutateAsync({ pedidoId: id, itemId, cantidad }));
+    const idItem = pedidoId;
+    encolar(() => editar.mutateAsync({ pedidoId: idItem, itemId, cantidad }));
   }
 
   function quitarItem(itemId: string) {
     if (!pedidoId) return;
     setError(null);
-    const id = pedidoId;
-    encolar(() => quitar.mutateAsync({ pedidoId: id, itemId }));
+    const idItem = pedidoId;
+    encolar(() => quitar.mutateAsync({ pedidoId: idItem, itemId }));
+  }
+
+  function guardarNota(nuevaNota: string) {
+    if (!pedidoId || !itemParaNota) return;
+    const itemId = itemParaNota.id;
+    const currentPedidoId = pedidoId;
+    setItemParaNota(null);
+    encolar(() =>
+      editar.mutateAsync({
+        pedidoId: currentPedidoId,
+        itemId,
+        nota: nuevaNota.trim() || null,
+      }),
+    );
   }
 
   function reiniciar() {
-    setPedidoId(null);
-    setMesaId('');
+    setMesaIdLocal('');
     setError(null);
+    navigate('/pos');
   }
 
   function enviarACocina() {
@@ -156,6 +201,7 @@ export function PosPage() {
     <div className="flex min-h-dvh flex-col gap-4 p-4 lg:h-dvh lg:min-h-0">
       <header className="flex flex-wrap items-end gap-4">
         <h1 className="font-display text-2xl font-bold">{t.pos.titulo}</h1>
+
         <div className="flex flex-col gap-1.5">
           <span id="tipo-lbl" className="text-sm font-medium">
             {t.pos.tipoPedido}
@@ -165,7 +211,7 @@ export function PosPage() {
             variant="outline"
             value={tipo}
             onValueChange={(v) => {
-              if (!pedidoId && (v === 'MESA' || v === 'LLEVAR')) setTipo(v);
+              if (!pedidoId && (v === 'MESA' || v === 'LLEVAR')) setTipoLocal(v);
             }}
           >
             <ToggleGroupItem value="MESA" disabled={!!pedidoId}>
@@ -176,26 +222,52 @@ export function PosPage() {
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
+
         {tipo === 'MESA' && !pedidoId && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="mesa-sel">{t.pos.mesaLabel}</Label>
             <select
               id="mesa-sel"
               value={mesaId}
-              onChange={(e) => setMesaId(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                const targetMesa = (mesas.data ?? []).find((m) => m.id === val);
+                if (targetMesa?.ocupada && targetMesa.pedidoId) {
+                  navigate(`/pos/pedido/${targetMesa.pedidoId}`);
+                } else {
+                  setMesaIdLocal(val);
+                }
+              }}
               className="h-12 min-w-56 rounded-md border border-input bg-card px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring"
             >
               <option value="">{mesasLibres.length ? t.pos.mesaPlaceholder : t.pos.sinMesasLibres}</option>
-              {mesasLibres.map((m) => (
+              {(mesas.data ?? []).map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.nombre}
+                  {m.nombre} {m.ocupada ? `• ${t.pos.mesaOcupada}` : `(${t.pos.mesaLibre})`}
                 </option>
               ))}
             </select>
           </div>
         )}
+
+        <Button
+          type="button"
+          variant="outline"
+          className="h-12 min-h-12 gap-2 font-semibold"
+          onClick={() => setMostrarActivos(true)}
+        >
+          <ReceiptText className="size-4" aria-hidden="true" />
+          {t.pos.activos}
+          {pedidosActivos.length > 0 && (
+            <span className="tabular rounded-full bg-primary/15 px-2 py-0.5 text-xs font-bold text-primary">
+              {pedidosActivos.length}
+            </span>
+          )}
+        </Button>
+
         {pedidoId && (
-          <Button variant="outline" onClick={reiniciar}>
+          <Button type="button" variant="outline" className="h-12 min-h-12 gap-1.5" onClick={reiniciar}>
+            <Plus className="size-4" aria-hidden="true" />
             {t.pos.nuevoPedido}
           </Button>
         )}
@@ -277,11 +349,19 @@ export function PosPage() {
               <>
                 <p className="text-sm text-muted-foreground">{t.pos.soloLectura}</p>
                 {items.map((i) => (
-                  <div key={i.id} className="flex justify-between gap-2 rounded-lg border bg-card p-3 text-sm">
-                    <span>
-                      <span className="tabular font-bold">{i.cantidad}×</span> {i.nombre}
-                    </span>
-                    <span className="tabular font-semibold">{formatearCOP(i.totalLinea)}</span>
+                  <div key={i.id} className="flex flex-col gap-1 rounded-lg border bg-card p-3 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <span>
+                        <span className="tabular font-bold">{i.cantidad}×</span> {i.nombre}
+                      </span>
+                      <span className="tabular font-semibold">{formatearCOP(i.totalLinea)}</span>
+                    </div>
+                    {i.nota && (
+                      <div className="flex items-center gap-1.5 rounded-md bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent-foreground">
+                        <StickyNote className="size-3 shrink-0 text-accent" aria-hidden="true" />
+                        <span className="italic">{i.nota}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </>
@@ -293,9 +373,11 @@ export function PosPage() {
                   nombre={i.nombre}
                   precioUnitario={i.precioUnitario}
                   cantidad={i.cantidad}
+                  nota={i.nota ?? undefined}
                   onIncrementar={() => cambiarCantidad(i.id, i.cantidad + 1)}
                   onDecrementar={() => cambiarCantidad(i.id, i.cantidad - 1)}
                   onEliminar={() => quitarItem(i.id)}
+                  onEditarNota={enEdicion ? () => setItemParaNota({ id: i.id, nombre: i.nombre, nota: i.nota ?? '' }) : undefined}
                 />
               ))
             )}
@@ -325,11 +407,40 @@ export function PosPage() {
           onCobrado={(r) => {
             setCobrando(false);
             setExito(r);
-            reiniciar();
+            navigate('/pos');
           }}
         />
       )}
       {exito && <ReciboDialog exito={exito} onCerrar={() => setExito(null)} />}
+
+      {itemParaNota && (
+        <NotaItemDialog
+          key={`${itemParaNota.id}:${itemParaNota.nota}`}
+          abierto={!!itemParaNota}
+          nombreProducto={itemParaNota.nombre}
+          notaInicial={itemParaNota.nota}
+          guardando={editar.isPending}
+          onGuardar={guardarNota}
+          onCerrar={() => setItemParaNota(null)}
+        />
+      )}
+
+      <PedidosActivosDialog
+        abierto={mostrarActivos}
+        pedidos={pedidosActivos}
+        mesas={mesas.data ?? []}
+        onCerrar={() => setMostrarActivos(false)}
+        onSeleccionarPedido={(pId) => {
+          setMostrarActivos(false);
+          navigate(`/pos/pedido/${pId}`);
+        }}
+        onSeleccionarMesaLibre={(mId) => {
+          setMostrarActivos(false);
+          setTipoLocal('MESA');
+          setMesaIdLocal(mId);
+          if (pedidoId) navigate('/pos');
+        }}
+      />
 
       <AlertDialog open={faltantes !== null} onOpenChange={(a) => !a && setFaltantes(null)}>
         <AlertDialogContent>
