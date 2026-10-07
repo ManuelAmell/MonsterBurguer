@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TIPOS_MOVIMIENTO_INVENTARIO, UNIDADES } from '../enums';
-import { paginacionRespuestaSchema, uuidSchema } from './common';
+import { paginacionQuerySchema, paginacionRespuestaSchema, uuidSchema } from './common';
 
 // --- Ingrediente (RN-30) ---
 
@@ -159,3 +159,16 @@ export type MovimientoInventario = z.infer<typeof movimientoInventarioSchema>;
 
 export const kardexRespuestaSchema = paginacionRespuestaSchema(movimientoInventarioSchema);
 export type KardexRespuesta = z.infer<typeof kardexRespuestaSchema>;
+
+// --- Consultas (GET /ingredientes) ---
+
+export const listarIngredientesQuerySchema = paginacionQuerySchema.extend({
+  stockBajo: z.preprocess((val) => {
+    if (typeof val === 'string') {
+      if (val.toLowerCase() === 'true') return true;
+      if (val.toLowerCase() === 'false') return false;
+    }
+    return val;
+  }, z.boolean().optional()),
+});
+export type ListarIngredientesQuery = z.infer<typeof listarIngredientesQuerySchema>;

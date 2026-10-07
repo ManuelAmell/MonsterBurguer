@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { UNIDADES } from '../enums';
-import { uuidSchema } from './common';
+import { paginacionQuerySchema, uuidSchema } from './common';
 
 // --- Categoría ---
 
@@ -226,3 +226,24 @@ export type CategoriaMenu = z.infer<typeof categoriaMenuSchema>;
 
 export const menuPosSchema = z.array(categoriaMenuSchema);
 export type MenuPos = z.infer<typeof menuPosSchema>;
+
+// --- Consultas (GET /productos) ---
+
+export const listarProductosQuerySchema = paginacionQuerySchema.extend({
+  categoriaId: uuidSchema.optional(),
+  activo: z.preprocess((val) => {
+    if (typeof val === 'string') {
+      if (val.toLowerCase() === 'true') return true;
+      if (val.toLowerCase() === 'false') return false;
+    }
+    return val;
+  }, z.boolean().optional()),
+  sinReceta: z.preprocess((val) => {
+    if (typeof val === 'string') {
+      if (val.toLowerCase() === 'true') return true;
+      if (val.toLowerCase() === 'false') return false;
+    }
+    return val;
+  }, z.boolean().optional()),
+});
+export type ListarProductosQuery = z.infer<typeof listarProductosQuerySchema>;

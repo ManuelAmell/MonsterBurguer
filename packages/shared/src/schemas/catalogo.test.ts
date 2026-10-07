@@ -7,6 +7,7 @@ import {
   crearProductoSchema,
   editarCategoriaSchema,
   editarProductoSchema,
+  listarProductosQuerySchema,
   menuPosSchema,
   productoDetalleSchema,
   productoSchema,
@@ -212,6 +213,30 @@ describe('schemas/catalogo', () => {
       ]);
       expect(menu).toHaveLength(1);
       expect(menu[0]?.productos[0]?.precio).toBe(25000);
+    });
+  });
+
+  describe('listarProductosQuerySchema', () => {
+    it('valida query params con filtros y paginación', () => {
+      const q = listarProductosQuerySchema.parse({
+        categoriaId: ID_CAT,
+        activo: 'true',
+        sinReceta: 'false',
+        limit: '20',
+      });
+      expect(q).toEqual({
+        categoriaId: ID_CAT,
+        activo: true,
+        sinReceta: false,
+        limit: 20,
+      });
+    });
+
+    it('acepta query vacía usando valores por defecto', () => {
+      const q = listarProductosQuerySchema.parse({});
+      expect(q.limit).toBe(50);
+      expect(q.activo).toBeUndefined();
+      expect(q.sinReceta).toBeUndefined();
     });
   });
 });
