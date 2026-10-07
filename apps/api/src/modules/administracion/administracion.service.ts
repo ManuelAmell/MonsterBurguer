@@ -1,9 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { desc, lt, sql } from 'drizzle-orm';
-import { fechaOperativa } from '@mb/shared';
+import { fechaOperativa, type ConfiguracionNegocio } from '@mb/shared';
 import { DB, type Db } from '../../shared-kernel/db/db';
 import { eventoSistema } from '../../shared-kernel/events/evento-sistema.schema';
-import { leerHoraCorte } from '../../shared-kernel/configuracion/configuracion.lector';
+import {
+  guardarConfiguracion,
+  leerConfiguracion,
+  leerHoraCorte,
+} from '../../shared-kernel/configuracion/configuracion.lector';
 
 export interface DashboardDia {
   fecha: string;
@@ -67,6 +71,58 @@ export class AdministracionService {
         payload: f.payload,
       })),
       nextCursor: filas.length === 50 ? String(filas[filas.length - 1]!.id) : null,
+    };
+  }
+
+  async obtenerConfiguracion(): Promise<ConfiguracionNegocio> {
+    const negocio = (await leerConfiguracion(this.db, 'negocio')) as Record<string, unknown> | undefined;
+    const propinaBp = Number((await leerConfiguracion(this.db, 'propina_sugerida_bp')) ?? 1000);
+    const horaCorte = await leerHoraCorte(this.db);
+
+    return {
+      nombre: String(negocio?.nombre ?? negocio?.razonSocial ?? 'MonsterBurguer'),
+      nit: String(negocio?.nit ?? negocio?.documento ?? ''),
+      direccion: String(negocio?.direccion ?? ''),
+      telefono: String(negocio?.telefono ?? ''),
+      pieRecibo: String(negocio?.pieRecibo ?? ''),
+      propinaSugeridaPorcentaje: Math.round(propinaBp / 100),
+      horaCorte,
+    };
+  }
+
+  async guardarConfiguracion(
+    input: ConfiguracionNegocio,
+    usuarioId: string,
+  ): Promise<ConfiguracionNegocio> {
+    const nit = (input.nit ?? '').trim();
+    const direccion = (input.direccion ?? '').trim();
+    const telefono = (input.telefono ?? '').trim();
+    const pieRecibo = (input.pieRecibo ?? '').trim();
+
+    const negocio = {
+      nombre: input.nombre.trim(),
+      razonSocial: input.nombre.trim(),
+      documento: nit,
+      nit,
+      direccion,
+      telefono,
+      pieRecibo,
+    };
+
+    await this.db.transaction(async (tx) => {
+      await guardarConfiguracion(tx, 'negocio', negocio, usuarioId);
+      await guardarConfiguracion(tx, 'propina_sugerida_bp', input.propinaSugeridaPorcentaje * 100, usuarioId);
+      await guardarConfiguracion(tx, 'hora_corte_dia', input.horaCorte.trim(), usuarioId);
+    });
+
+    return {
+      nombre: input.nombre.trim(),
+      nit,
+      direccion,
+      telefono,
+      pieRecibo,
+      propinaSugeridaPorcentaje: input.propinaSugeridaPorcentaje,
+      horaCorte: input.horaCorte.trim(),
     };
   }
 }

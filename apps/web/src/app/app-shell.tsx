@@ -1,4 +1,16 @@
-import { Boxes, ChefHat, LayoutDashboard, Package, LogOut, ShoppingCart, Wallet, type LucideIcon } from 'lucide-react';
+import {
+  Boxes,
+  ChefHat,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Settings,
+  ShoppingCart,
+  Tags,
+  Users,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import type { Rol } from '@mb/shared';
@@ -23,7 +35,10 @@ export const NAV: ItemNav[] = [
   { to: '/cocina', label: t.nav.cocina, icon: ChefHat, roles: ['ADMIN', 'COCINA'] },
   { to: '/admin', label: t.admin.nav.dashboard, icon: LayoutDashboard, roles: ['ADMIN'], end: true },
   { to: '/admin/productos', label: t.admin.nav.productos, icon: Package, roles: ['ADMIN'] },
+  { to: '/admin/categorias', label: t.admin.nav.categorias, icon: Tags, roles: ['ADMIN'] },
   { to: '/admin/inventario', label: t.admin.nav.inventario, icon: Boxes, roles: ['ADMIN'] },
+  { to: '/admin/usuarios', label: t.admin.nav.usuarios, icon: Users, roles: ['ADMIN'] },
+  { to: '/admin/configuracion', label: t.admin.nav.configuracion, icon: Settings, roles: ['ADMIN'] },
 ];
 
 /** Layout con barra lateral (≥ 1024 px) o barra superior (< 1024 px). DESIGN.md §6. */

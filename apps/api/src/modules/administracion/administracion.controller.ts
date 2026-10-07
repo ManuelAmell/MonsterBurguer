@@ -1,8 +1,13 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { fechaOperativaSchema } from '@mb/shared';
+import { Body, Controller, Get, Put, Query } from '@nestjs/common';
+import {
+  configuracionNegocioSchema,
+  fechaOperativaSchema,
+  type ConfiguracionNegocio,
+  type UsuarioSesion,
+} from '@mb/shared';
 import { z } from 'zod';
 import { ZodPipe } from '../../shared-kernel/validation/zod.pipe';
-import { Roles } from '../identidad/identidad.public';
+import { Roles, UsuarioActual } from '../identidad/identidad.public';
 import { AdministracionService, type DashboardDia } from './administracion.service';
 
 const dashboardQuery = z.object({ fecha: fechaOperativaSchema.optional() });
@@ -23,5 +28,18 @@ export class AdministracionController {
   @Get('eventos')
   async eventos(@Query(new ZodPipe(eventosQuery)) q: z.output<typeof eventosQuery>) {
     return this.admin.eventos(q.cursor);
+  }
+
+  @Get('configuracion')
+  async obtenerConfiguracion(): Promise<ConfiguracionNegocio> {
+    return this.admin.obtenerConfiguracion();
+  }
+
+  @Put('configuracion')
+  async guardarConfiguracion(
+    @UsuarioActual() usuario: UsuarioSesion,
+    @Body(new ZodPipe(configuracionNegocioSchema)) body: ConfiguracionNegocio,
+  ): Promise<ConfiguracionNegocio> {
+    return this.admin.guardarConfiguracion(body, usuario.id);
   }
 }

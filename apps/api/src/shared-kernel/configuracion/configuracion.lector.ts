@@ -28,3 +28,28 @@ export async function leerHoraCorte(executor: Executor): Promise<string> {
   const valor = await leerConfiguracion(executor, 'hora_corte_dia');
   return typeof valor === 'string' && /^\d{1,2}:\d{2}$/.test(valor) ? valor : '05:00';
 }
+
+/** Guarda o actualiza un parámetro en la tabla `configuracion`. */
+export async function guardarConfiguracion(
+  executor: Executor,
+  clave: string,
+  valor: unknown,
+  usuarioId?: string,
+): Promise<void> {
+  await executor
+    .insert(configuracion)
+    .values({
+      clave,
+      valor,
+      updatedAt: new Date(),
+      updatedBy: usuarioId ?? null,
+    })
+    .onConflictDoUpdate({
+      target: configuracion.clave,
+      set: {
+        valor,
+        updatedAt: new Date(),
+        updatedBy: usuarioId ?? null,
+      },
+    });
+}
