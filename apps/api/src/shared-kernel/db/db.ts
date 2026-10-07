@@ -10,8 +10,8 @@ export type Executor = Db | Tx;
 export const DB = Symbol('DB');
 export const PG_POOL = Symbol('PG_POOL');
 
-export function crearPool(connectionString: string): Pool {
-  return new Pool({ connectionString, max: 10 });
+export function crearPool(connectionString: string, max = 20): Pool {
+  return new Pool({ connectionString, max });
 }
 
 export function crearDb(pool: Pool): Db {

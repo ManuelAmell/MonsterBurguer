@@ -1,6 +1,6 @@
 # CLAUDE.md — MonsterBurguer POS
 
-POS para restaurante (hamburguesería). Monorepo TypeScript: NestJS + Drizzle + PostgreSQL 18 (backend), React 19 + Vite + Tailwind v4 + shadcn/ui (frontend), `@mb/shared` (Zod, tipos, dinero).
+POS para restaurante (hamburguesería). Monorepo TypeScript: NestJS 12 + Drizzle + PostgreSQL (17 local / compatible PG 18) (backend), React 19 + Vite 8 + React Router 8 + Tailwind v4 + shadcn/ui (frontend), `@mb/shared` (Zod 4, tipos, dinero).
 
 ## Leer antes de trabajar
 
@@ -25,30 +25,28 @@ POS para restaurante (hamburguesería). Monorepo TypeScript: NestJS + Drizzle + 
 - **Fronteras de módulo:** un módulo solo importa de otro su `*.public.ts` y solo consulta sus propias tablas. `administracion` lee por vistas SQL.
 - **Dinero** siempre entero en pesos COP; cálculos solo vía `@mb/shared/money.ts`. Nunca `float` para dinero.
 - **Inventario** en enteros de unidad base (G, ML, UND). El stock solo cambia con un `movimiento_inventario`.
-- **Transacciones:** casos de uso que cruzan módulos usan `EventBus.publishInTx` (handlers en transacción) cuando debe ser atómico; post-commit para SSE, alertas y estadísticas.
+- **Transacciones:** casos de uso que cruzan módulos registran handlers explícitamente vía `EventBus.alPublicarEnTx` (en transacción) y `EventBus.despuesDeCommit` (post-commit para SSE, alertas y estadísticas).
 - **Validación** con Zod de `@mb/shared/schemas` en front y back; no dupliques esquemas.
 - **Idioma:** dominio en español (`Pedido`, `Comanda`, `confirmar()`), sufijos técnicos en inglés (`PedidosService`, `pedidos.controller.ts`). Tablas/columnas `snake_case`; JSON `camelCase`. Textos de UI en `apps/web/src/i18n/es.ts`.
 - **Fechas** `timestamptz` UTC; mostrar en `America/Bogota`. Usar la "fecha operativa" (RN-16) para todo lo diario.
-- Sin `any`; sin `console.log` (usar el logger pino).
+- Sin `any`; sin `console.log` (usar el logger pino; seed puede usar console.info).
 
 ## Comandos
 
 ```bash
 pnpm install
-docker compose up -d postgres
-pnpm --filter api db:generate     # generar migración Drizzle tras cambiar *.schema.ts
-pnpm --filter api db:migrate
+pnpm --filter api db:migrate       # PostgreSQL 17 local o Docker
 pnpm --filter api db:seed
-pnpm dev                          # api :3000 + web :5173
-pnpm test                         # unit + integración (Testcontainers necesita Docker)
-pnpm --filter web test:e2e        # Playwright
-pnpm lint && pnpm typecheck
+pnpm dev                           # api :3000 + web :5173
+pnpm test                          # unit + integración (contra DATABASE_URL_TEST en PostgreSQL)
+pnpm --filter web test:e2e         # Playwright
+pnpm lint && pnpm depcruise && pnpm typecheck
 ```
 
 ## Tests
 
 - Toda regla `RN-xx` implementada tiene al menos un test que la nombra (`it('RN-33: rechaza confirmar sin stock', …)`).
-- Casos de uso con BD → test de integración con Testcontainers (Postgres real, no mocks de BD).
+- Casos de uso con BD → test de integración contra DATABASE_URL_TEST (PostgreSQL real, no mocks de BD).
 - Golden path E2E: venta completa (ver ROADMAP Hito 6).
 
 ## Contexto académico

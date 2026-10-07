@@ -21,13 +21,13 @@ Nace del documento académico [`Etapa1_Definicion_del_Sistema_Restaurante.docx`]
 
 TypeScript de punta a punta.
 
-- **Backend:** Node.js 24 LTS · NestJS 11 · Drizzle ORM · Zod
-- **Base de datos:** PostgreSQL 18
-- **Frontend:** React 19 · Vite · Tailwind CSS v4 · shadcn/ui · TanStack Query · Zustand · React Router
-- **Compartido:** paquete `@mb/shared` (esquemas Zod, tipos, utilidades de dinero)
+- **Backend:** Node.js 24 LTS · NestJS 12 · Drizzle ORM · Zod 4
+- **Base de datos:** PostgreSQL 17 (local dev) / compatible PostgreSQL 18
+- **Frontend:** React 19 · Vite 8 · React Router 8 · Tailwind CSS v4 · shadcn/ui · TanStack Query · Zustand
+- **Compartido:** paquete `@mb/shared` (esquemas Zod 4, tipos, utilidades de dinero)
 - **Tiempo real:** Server-Sent Events (SSE)
 - **Diseño UI/UX:** skill `/ui-ux-pro-max` (ver [DESIGN.md](./DESIGN.md))
-- **Tests:** Vitest · Testcontainers · Playwright
+- **Tests:** Vitest 5 · base de datos de test (DATABASE_URL_TEST) · Playwright
 - **Infra:** pnpm workspaces · Docker Compose · GitHub Actions
 
 ## Estructura del repositorio (objetivo)
@@ -47,11 +47,11 @@ MonsterBurguer/
 └── CLAUDE.md
 ```
 
-## Arranque rápido (cuando exista el código — Hito 0)
+## Arranque rápido (Hito 0 completado)
 
 ```bash
 pnpm install
-docker compose up -d postgres
+# Requiere PostgreSQL 17 local o docker compose up -d postgres
 pnpm --filter api db:migrate && pnpm --filter api db:seed
 pnpm dev                     # api :3000 + web :5173
 ```

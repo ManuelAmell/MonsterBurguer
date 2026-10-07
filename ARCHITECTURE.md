@@ -33,22 +33,22 @@
 
 | Capa | Tecnología | Motivo |
 |---|---|---|
-| Lenguaje | **TypeScript 5.x** (strict) en todo el repo | Un solo lenguaje; tipos compartidos front/back |
+| Lenguaje | **TypeScript 6.0** (strict) en todo el repo | Un solo lenguaje; tipos compartidos front/back |
 | Runtime | **Node.js 24 LTS** | LTS vigente |
-| Backend | **NestJS 11** | Módulos, DI y guards encajan con un monolito modular; muy documentado |
+| Backend | **NestJS 12** | Módulos, DI y guards encajan con un monolito modular; muy documentado |
 | ORM / SQL | **Drizzle ORM** + `drizzle-kit` (migraciones SQL versionadas) | SQL-first, tipado, soporta `SELECT … FOR UPDATE` y transacciones explícitas (crítico para stock y dinero) |
-| Validación | **Zod** (esquemas en `@mb/shared`) | Mismo esquema valida en el formulario y en la API |
-| Base de datos | **PostgreSQL 18** | Ver [ADR-002](#11-decisiones-adr) |
+| Validación | **Zod 4** (esquemas en `@mb/shared`) | Mismo esquema valida en el formulario y en la API |
+| Base de datos | **PostgreSQL 17 (dev) / compatible 18** | Ver [ADR-002](#11-decisiones-adr) |
 | Auth | Sesiones opacas en Postgres + cookie `HttpOnly`, hash **argon2id** | Revocación inmediata, funciona con SSE, sin complejidad JWT |
 | Tiempo real | **SSE** (`@Sse()` de NestJS) | KDS y caja solo necesitan recibir; acciones van por REST |
 | Logs | **pino** (`nestjs-pino`) | JSON estructurado, rápido |
-| Frontend | **React 19 + Vite + React Router** | SPA rápida; el POS no necesita SSR/SEO |
+| Frontend | **React 19 + Vite 8 + React Router 8** | SPA rápida; el POS no necesita SSR/SEO |
 | Datos servidor (front) | **TanStack Query** | Caché, reintentos, invalidación por eventos SSE |
 | Estado local (front) | **Zustand** | Ticket en curso del POS |
 | UI | **Tailwind CSS v4 + shadcn/ui + lucide-react** | Componentes accesibles (Radix) y propios |
 | Formularios | **react-hook-form + zod** | Validación compartida |
 | Gráficos | **Recharts** | Dashboard |
-| Tests | **Vitest**, **Testcontainers** (Postgres real), **Playwright** (E2E) | |
+| Tests | **Vitest 5**, **PostgreSQL dedicado (`DATABASE_URL_TEST`)**, **Playwright** (E2E) | |
 | Monorepo | **pnpm workspaces** | Sin herramientas extra |
 | Calidad | ESLint + Prettier, `tsc --noEmit`, Husky + lint-staged | |
 | Infra | Docker Compose, GitHub Actions | |
@@ -134,18 +134,30 @@ Todo evento se persiste en `evento_sistema` **dentro de la misma transacción** 
 
 ```ts
 // shared-kernel/events
-interface DomainEvent<T = unknown> { type: string; aggregateId: string; payload: T; occurredAt: Date }
-
-class EventBus {
-  // dentro de la tx: guarda en evento_sistema y ejecuta handlers transaccionales con el mismo `tx`
-  publishInTx(tx: Tx, event: DomainEvent): Promise<void>
+export interface EventoDominio<T = unknown> {
+  tipo: string;
+  modulo: string;
+  agregadoId?: string | null;
+  usuarioId?: string | null;
+  payload: T;
 }
-// decoradores:
-@OnEventInTx('PedidoConfirmado')        // misma transacción
-@OnEventAfterCommit('PedidoConfirmado') // dispatcher del outbox
+
+export interface EventoPublicado<T = unknown> extends EventoDominio<T> {
+  id: number;
+  createdAt: Date;
+}
+
+export class EventBus {
+  // Los módulos registran handlers explícitamente (ej. en onModuleInit)
+  alPublicarEnTx(tipo: string, handler: (tx: Tx, evento: EventoPublicado) => Promise<void>): void;
+  despuesDeCommit(tipo: string, handler: (evento: EventoPublicado) => Promise<void>): void;
+
+  // Dentro de la transacción: persiste en evento_sistema y ejecuta handlers transaccionales
+  publicarEnTx<T>(tx: Tx, evento: EventoDominio<T>): Promise<EventoPublicado<T>>;
+}
 ```
 
-El dispatcher post-commit corre en el mismo proceso: `LISTEN/NOTIFY` para despertar al instante + sondeo de respaldo cada 5 s sobre `evento_sistema WHERE procesado_at IS NULL … FOR UPDATE SKIP LOCKED`.
+El dispatcher post-commit corre en el mismo proceso: `LISTEN/NOTIFY` (canal `evento_sistema`) para despertar al instante + sondeo de respaldo cada 5 s sobre `evento_sistema WHERE procesado_at IS NULL … FOR UPDATE SKIP LOCKED`.
 
 ### Catálogo de eventos (MVP)
 
@@ -242,7 +254,7 @@ Roles del MVP: `ADMIN`, `CAJERO`, `COCINA`. (`MESERO` llega en v1.1 con la vista
 | Nivel | Herramienta | Qué cubre |
 |---|---|---|
 | Unitario | Vitest | `@mb/shared/money`, máquinas de estado, reglas de servicio |
-| Integración | Vitest + Testcontainers (Postgres 18) | Casos de uso con BD real: confirmar pedido descuenta stock, concurrencia de stock, cierre de caja |
+| Integración | Vitest + PostgreSQL dedicado (`DATABASE_URL_TEST`) | Casos de uso con BD real: login/sesiones, confirmar pedido descuenta stock, concurrencia de stock, cierre de caja |
 | Fronteras | dependency-cruiser | Ningún módulo importa internos de otro |
 | E2E | Playwright | "Venta completa": login → ticket → cocina → cobro → recibo |
 
@@ -256,7 +268,7 @@ Roles del MVP: `ADMIN`, `CAJERO`, `COCINA`. (`MESERO` llega en v1.1 con la vista
 | # | Decisión | Alternativas | Motivo |
 |---|---|---|---|
 | 001 | TypeScript full-stack (NestJS + React) | Java/Spring, Python/FastAPI | Un lenguaje, tipos y esquemas compartidos, un solo toolchain |
-| 002 | PostgreSQL 18 | MySQL, SQLite | Transacciones y bloqueo de filas robustos, `CHECK`/índices parciales para invariantes de negocio, JSONB para eventos, `LISTEN/NOTIFY`, funciones de ventana para reportes |
+| 002 | PostgreSQL 17 (dev local) / compatible 18 | MySQL, SQLite | Transacciones y bloqueo de filas robustos, `CHECK`/índices parciales para invariantes de negocio, JSONB para eventos, `LISTEN/NOTIFY`, funciones de ventana para reportes. Dev usa PG 17 local con base de test dedicada (`DATABASE_URL_TEST`); producción/CI usan contenedor PostgreSQL. |
 | 003 | Drizzle ORM | Prisma, TypeORM | SQL explícito, `FOR UPDATE`, transacciones interactivas, migraciones SQL legibles |
 | 004 | Monolito modular | Microservicios | Un restaurante, un servidor; fronteras claras sin coste operativo |
 | 005 | Eventos con outbox en Postgres | Redis/RabbitMQ | Cero infraestructura extra; atomicidad con la transacción de negocio |

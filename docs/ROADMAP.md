@@ -10,17 +10,17 @@ Cada hito termina con algo **demostrable** y sigue el recorrido del pedido del d
 
 Demo: `pnpm dev` levanta api + web; login funciona; CI en verde.
 
-- [ ] Monorepo pnpm: `apps/api`, `apps/web`, `packages/shared`; TS strict, ESLint, Prettier, Husky
-- [ ] `docker-compose.yml` con PostgreSQL 18 (+ volumen) y `.env.example`
-- [ ] NestJS base: config validada con Zod, `nestjs-pino`, filtro de errores con formato único, health check `/api/v1/health`
-- [ ] Drizzle: cliente, helper de transacción, migración inicial (`usuario`, `sesion_usuario`, `configuracion`, `evento_sistema`)
-- [ ] `shared-kernel/events`: `EventBus.publishInTx`, handlers en transacción y post-commit, dispatcher del outbox
-- [ ] Módulo `identidad`: login/logout/me, guard de sesión y de roles, throttling, seed `admin`
-- [ ] `@mb/shared`: `money.ts` con tests (RN-01..06, incluido el ejemplo de $49.700), `enums.ts`
-- [ ] Web: Vite + Tailwind v4 + shadcn/ui con tokens de DESIGN §3 (claro/oscuro), fuentes, router por rol, layout con barra lateral, pantalla de login
-- [ ] Testcontainers configurado + primer test de integración (login)
-- [ ] dependency-cruiser con reglas de frontera entre módulos
-- [ ] GitHub Actions: lint → typecheck → test → build
+- [x] Monorepo pnpm: `apps/api`, `apps/web`, `packages/shared`; TS strict, ESLint, Prettier
+- [x] `docker-compose.yml` con PostgreSQL (+ volumen) y `.env.example`
+- [x] NestJS base: config validada con Zod, `nestjs-pino`, filtro de errores con formato único, health check `/api/v1/health`
+- [x] Drizzle: cliente, helper de transacción, migración inicial (`usuario`, `sesion_usuario`, `configuracion`, `evento_sistema`)
+- [x] `shared-kernel/events`: `EventBus` (`alPublicarEnTx`, `despuesDeCommit`), handlers en transacción y post-commit, dispatcher del outbox
+- [x] Módulo `identidad`: login/logout/me, guard de sesión y de roles, throttling, seed `admin`
+- [x] `@mb/shared`: `money.ts` con tests (RN-01..06, incluido el ejemplo de $49.700), `enums.ts`
+- [x] Web: Vite 8 + Tailwind v4 + shadcn/ui con tokens de DESIGN §3 (claro/oscuro), fuentes, router por rol, layout con barra lateral, pantalla de login
+- [x] Base de datos de test (`DATABASE_URL_TEST`) configurada + 10 tests de integración de autenticación (login, me, logout, throttling, roles)
+- [x] dependency-cruiser con reglas de frontera entre módulos
+- [x] GitHub Actions: lint → typecheck → test → build
 - [ ] Ejecutar `/ui-ux-pro-max` con `--persist` para generar `design-system/MASTER.md` (requiere reparar la instalación de la skill, ver DESIGN §9)
 
 ## Hito 1 — Catálogo + Inventario
