@@ -2,7 +2,6 @@ import { AlertCircle, BadgeCheck, Loader2, Lock, Printer, TrendingDown, Trending
 import { useState } from 'react';
 import { formatearCOP, type ResumenCierre } from '@mb/shared';
 import { EmptyState } from '@/components/empty-state';
-import { NumericKeypad } from '@/components/pos/numeric-keypad';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,28 +20,10 @@ import { digitosAPesos, formatearFechaHora } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { uuid } from '@/lib/uuid';
 import '@/styles/print.css';
+import { EntradaMonto } from './entrada-monto';
+import { HistorialCierres } from './historial-cierres';
+import { MovimientosLista } from './movimientos';
 import { useAbrirCaja, useCerrarCaja, useSesionActual } from './queries';
-
-/** Monto en pantalla editado con el NumericKeypad. */
-function EntradaMonto({ etiqueta, digitos, onCambio }: { etiqueta: string; digitos: string; onCambio: (d: string) => void }) {
-  const editar = (fn: (a: string) => string) => onCambio(fn(digitos).replace(/^0+(?=\d)/, '').slice(0, 9));
-  return (
-    <div className="flex max-w-sm flex-col gap-3">
-      <div className="rounded-lg border bg-card px-4 py-3">
-        <p className="text-sm font-medium text-muted-foreground">{etiqueta}</p>
-        <p aria-live="polite" className="tabular font-display text-4xl font-extrabold">
-          {formatearCOP(digitosAPesos(digitos))}
-        </p>
-      </div>
-      <NumericKeypad
-        onDigito={(d) => editar((a) => a + d)}
-        onBorrar={() => editar((a) => a.slice(0, -1))}
-        onLimpiar={() => onCambio('')}
-        onAtajoMonto={(m) => onCambio(String(m))}
-      />
-    </div>
-  );
-}
 
 function Diferencia({ valor }: { valor: number }) {
   const cuadra = valor === 0;
@@ -76,6 +57,7 @@ export function CajaPage() {
   const sesion = useSesionActual();
   const abrir = useAbrirCaja();
   const cerrar = useCerrarCaja();
+  const [pestana, setPestana] = useState<'turno' | 'historial'>('turno');
   const [base, setBase] = useState('');
   const [contado, setContado] = useState('');
   const [confirmando, setConfirmando] = useState(false);
@@ -101,7 +83,30 @@ export function CajaPage() {
     <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6">
       <h1 className="font-display text-3xl font-bold">{t.caja.titulo}</h1>
 
-      {sesion.isPending ? (
+      <div role="tablist" aria-label={t.caja.titulo} className="flex gap-2 border-b">
+        {(['turno', 'historial'] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`pestana-${id}`}
+            aria-selected={pestana === id}
+            aria-controls="panel-caja"
+            onClick={() => setPestana(id)}
+            className={cn(
+              'h-12 border-b-2 px-4 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring',
+              pestana === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {id === 'turno' ? t.caja.pestanaTurno : t.caja.pestanaHistorial}
+          </button>
+        ))}
+      </div>
+
+      <div id="panel-caja" role="tabpanel" aria-labelledby={`pestana-${pestana}`} className="flex flex-col gap-6">
+      {pestana === 'historial' ? (
+        <HistorialCierres />
+      ) : sesion.isPending ? (
         <p role="status" className="flex items-center gap-2 text-muted-foreground">
           <Loader2 aria-hidden="true" className="size-5 animate-spin" />
           {t.caja.cargando}
@@ -209,6 +214,9 @@ export function CajaPage() {
               </div>
             </CardContent>
           </Card>
+          <div className="md:col-span-2">
+            <MovimientosLista sesionId={actual.sesion.id} />
+          </div>
 
           <section className="flex flex-col gap-4">
             <h2 className="font-display text-xl font-bold">{t.caja.cerrarTitulo}</h2>
@@ -228,6 +236,7 @@ export function CajaPage() {
           </section>
         </div>
       )}
+      </div>
 
       <AlertDialog open={confirmando} onOpenChange={setConfirmando}>
         <AlertDialogContent>

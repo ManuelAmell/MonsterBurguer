@@ -11,7 +11,12 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { ESTADOS_SESION_CAJA, METODOS_PAGO, REGIMENES_TRIBUTARIOS } from '@mb/shared';
+import {
+  ESTADOS_SESION_CAJA,
+  METODOS_PAGO,
+  REGIMENES_TRIBUTARIOS,
+  TIPOS_MOVIMIENTO_CAJA,
+} from '@mb/shared';
 
 export const reciboNumeroSeq = pgSequence('recibo_numero_seq', { startWith: 1, increment: 1 });
 
@@ -88,3 +93,27 @@ export const pago = pgTable(
     check('pago_recibido_check', sql`${t.recibido} is null or ${t.recibido} >= ${t.monto}`),
   ],
 );
+
+/** `usuario_id` apunta a identidad: la FK se agrega a mano en la migración. */
+export const movimientoCaja = pgTable(
+  'movimiento_caja',
+  {
+    id: uuid().primaryKey(),
+    sesionCajaId: uuid()
+      .notNull()
+      .references(() => sesionCaja.id, { onDelete: 'restrict' }),
+    tipo: text({ enum: TIPOS_MOVIMIENTO_CAJA }).notNull(),
+    monto: bigint({ mode: 'number' }).notNull(),
+    motivo: text().notNull(),
+    usuarioId: uuid().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('movimiento_caja_sesion_idx').on(t.sesionCajaId),
+    index('movimiento_caja_created_idx').on(t.createdAt),
+    check('movimiento_caja_tipo_check', sql`${t.tipo} in ('INGRESO', 'RETIRO')`),
+    check('movimiento_caja_monto_check', sql`${t.monto} > 0`),
+    check('movimiento_caja_motivo_check', sql`length(${t.motivo}) between 3 and 140`),
+  ],
+);
+

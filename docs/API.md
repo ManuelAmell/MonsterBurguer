@@ -574,7 +574,7 @@ Cualquier fallo de negocio, validación o autorización devuelve la estructura d
 
 #### `POST /api/v1/caja/sesiones/:id/cerrar`
 - **Roles:** `ADMIN`, `CAJERO`.
-- **Descripción:** Cierra la sesión de caja, calcula la diferencia entre efectivo contado y esperado, y publica `SesionCajaCerrada` (RN-47).
+- **Descripción:** Cierra la sesión de caja, calcula la diferencia entre efectivo contado y esperado, y publica `SesionCajaCerrada` (RN-47). `efectivoEsperado = montoApertura + ventasEfectivo + ingresos - retiros`.
 - **Cuerpo (`cerrarSesionCajaSchema`):**
   ```json
   { "efectivoContado": 199800 }
@@ -593,6 +593,51 @@ Cualquier fallo de negocio, validación o autorización devuelve la estructura d
     "cerradaAt": "2026-10-06T23:30:00.000Z"
   }
   ```
+
+#### `POST /api/v1/caja/sesiones/:id/movimientos`
+- **Roles:** `ADMIN`, `CAJERO` (el cajero solo sobre su propia sesión; `ADMIN` sobre cualquiera).
+- **Descripción:** Registra un ingreso o retiro manual de efectivo en una sesión `ABIERTA` (RN-46). Publica `MovimientoCajaRegistrado` en `evento_sistema`.
+- **Cuerpo (`movimientoCajaInputSchema`):**
+  ```json
+  { "tipo": "RETIRO", "monto": 5000, "motivo": "Compra de hielo" }
+  ```
+  `tipo` es `INGRESO` o `RETIRO`; `monto` es entero COP > 0; `motivo` tiene de 3 a 140 caracteres.
+- **Respuesta:** `201 Created` con el `MovimientoCaja` (`id`, `sesionCajaId`, `tipo`, `monto`, `motivo`, `usuarioId`, `createdAt`).
+- **Errores:** `403 SIN_PERMISO` (sesión de otro cajero), `404 NO_ENCONTRADO`, `409 ESTADO_INVALIDO` (sesión cerrada), `409 EFECTIVO_INSUFICIENTE` (un `RETIRO` dejaría el efectivo esperado en negativo; `detalles`: `efectivoEsperado`, `montoRetiro`).
+
+#### `GET /api/v1/caja/sesiones/:id/movimientos`
+- **Roles:** `ADMIN`, `CAJERO` (propia sesión; `ADMIN` cualquiera, si no `403`).
+- **Respuesta (200 OK):** arreglo de `MovimientoCaja` en orden cronológico.
+
+#### `GET /api/v1/caja/sesiones`
+- **Roles:** `ADMIN` (todas las sesiones), `CAJERO` (solo las suyas).
+- **Descripción:** Historial de sesiones de caja, paginado por cursor, más reciente primero.
+- **Query:** `desde` y `hasta` (`YYYY-MM-DD`, fechas operativas RN-16, inclusivas y opcionales, aplicadas a la fecha operativa de apertura), `cursor`, `limit` (máx. 100). Formato inválido o `desde > hasta` → `400 VALIDACION`.
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "items": [
+      {
+        "id": "0199b2c4-cccc-7c9b-b530-1c8f12a34567",
+        "usuarioId": "0199b2c4-1111-7c9b-b530-1c8f12a34567",
+        "cajero": { "id": "0199b2c4-1111-7c9b-b530-1c8f12a34567", "nombre": "Caja 1" },
+        "estado": "CERRADA",
+        "montoApertura": 50000,
+        "efectivoEsperado": 89900,
+        "efectivoContado": 89900,
+        "diferencia": 0,
+        "abiertaAt": "2026-10-07T23:29:00.000Z",
+        "cerradaAt": "2026-10-07T23:30:00.000Z",
+        "version": 1
+      }
+    ],
+    "nextCursor": null
+  }
+  ```
+
+#### `GET /api/v1/caja/sesiones/:id`
+- **Roles:** `ADMIN`, `CAJERO` (propia sesión; `ADMIN` cualquiera, si no `403`).
+- **Descripción:** Detalle de una sesión: los campos del historial más `totalesPorMetodo` (`efectivo`, `tarjeta`, `transferencia`), `totalesMovimientos` (`ingresos`, `retiros`) y `movimientos`.
 
 #### `POST /api/v1/caja/cobros`
 - **Roles:** `ADMIN`, `CAJERO`.

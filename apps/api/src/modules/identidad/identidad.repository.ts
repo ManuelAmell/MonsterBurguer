@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, gt, lt } from 'drizzle-orm';
+import { and, eq, gt, inArray, lt } from 'drizzle-orm';
 import { DB, type Db, type Executor } from '../../shared-kernel/db/db';
 import { sesionUsuario, usuario } from './identidad.schema';
 
@@ -8,6 +8,19 @@ export type Usuario = typeof usuario.$inferSelect;
 @Injectable()
 export class IdentidadRepository {
   constructor(@Inject(DB) private readonly db: Db) {}
+
+  async nombresPorIds(ids: string[], ex: Executor = this.db): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const filas = await ex
+      .select({ id: usuario.id, nombre: usuario.nombre })
+      .from(usuario)
+      .where(inArray(usuario.id, ids));
+    const mapa = new Map<string, string>();
+    for (const f of filas) {
+      mapa.set(f.id, f.nombre);
+    }
+    return mapa;
+  }
 
   async buscarPorUsername(username: string): Promise<Usuario | undefined> {
     const [fila] = await this.db.select().from(usuario).where(eq(usuario.username, username)).limit(1);
