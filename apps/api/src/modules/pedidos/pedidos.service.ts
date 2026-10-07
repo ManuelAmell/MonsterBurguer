@@ -5,6 +5,7 @@ import {
   fechaOperativa,
   totalLinea,
   type AgregarPedidoItemInput,
+  type EditarPedidoItemOutput,
   type CrearMesaInput,
   type CrearPedidoInput,
   type EditarMesaInput,
@@ -164,6 +165,27 @@ export class PedidosService {
           nota: input.nota ? input.nota : null,
           totalLinea: totalLinea({ precioUnitario: prod.precio, cantidad: input.cantidad }),
           orden: existentes.length,
+        },
+        tx,
+      );
+      await this.recalcular(tx, p);
+    });
+    return this.obtenerPedido(pedidoId);
+  }
+
+  /** RN-12/RN-14: cambia cantidad o nota de un ítem mientras el pedido está ABIERTO. */
+  async editarItem(pedidoId: string, itemId: string, input: EditarPedidoItemOutput): Promise<Pedido> {
+    await this.db.transaction(async (tx) => {
+      const p = await this.bloquearAbierto(tx, pedidoId);
+      const item = await this.repo.buscarItem(pedidoId, itemId, tx);
+      if (!item) throw DomainError.noEncontrado('Ítem no encontrado.');
+      const cantidad = input.cantidad ?? item.cantidad;
+      await this.repo.actualizarItem(
+        itemId,
+        {
+          cantidad,
+          nota: input.nota === undefined ? item.nota : input.nota || null,
+          totalLinea: totalLinea({ precioUnitario: item.precioUnitario, cantidad }),
         },
         tx,
       );

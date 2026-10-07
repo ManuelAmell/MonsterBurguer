@@ -1,7 +1,9 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   agregarPedidoItemSchema,
   crearPedidoSchema,
+  editarPedidoItemSchema,
+  type EditarPedidoItemOutput,
   listarPedidosQuerySchema,
   uuidSchema,
   type AgregarPedidoItemOutput,
@@ -49,6 +51,15 @@ export class PedidosController {
     @Body(new ZodPipe(agregarPedidoItemSchema)) body: AgregarPedidoItemOutput,
   ): Promise<Pedido> {
     return this.pedidos.agregarItem(id, body);
+  }
+
+  @Patch(':id/items/:itemId')
+  async editarItem(
+    @Param('id', IdPipe) id: string,
+    @Param('itemId', IdPipe) itemId: string,
+    @Body(new ZodPipe(editarPedidoItemSchema)) body: EditarPedidoItemOutput,
+  ): Promise<Pedido> {
+    return this.pedidos.editarItem(id, itemId, body);
   }
 
   @Delete(':id/items/:itemId')
