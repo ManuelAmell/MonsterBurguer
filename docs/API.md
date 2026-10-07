@@ -1,170 +1,735 @@
 # API — MonsterBurguer POS
 
-Base: `/api/v1`. JSON UTF-8. Autenticación por cookie de sesión `mb_session` (ver ARCHITECTURE §9). Los esquemas de entrada/salida son los Zod de `@mb/shared/schemas` (fuente de verdad); este documento resume el contrato.
+> **Especificación técnica del contrato HTTP REST y Server-Sent Events (SSE).**  
+> Todos los endpoints reflejan el código implementado en los controladores de `apps/api/src/modules/` y los esquemas Zod en `@mb/shared/schemas`.
 
-## Convenciones
+Prefijo global: `/api/v1`  
+Formato de intercambio: JSON UTF-8 (`Content-Type: application/json; charset=utf-8`)  
+Tiempo real: `GET /api/v1/stream` (`Content-Type: text/event-stream`)
 
-- Fechas: ISO-8601 en UTC (`2026-10-06T19:42:10.123Z`). `fecha_operativa`: `YYYY-MM-DD`.
-- Dinero: enteros en pesos COP (`49700`). Cantidades de inventario: enteros en unidad base.
-- IDs: UUID v7 (string).
-- Campos JSON en `camelCase` (se mapean a `snake_case` en la BD).
-- Listas paginadas: `?limit=50&cursor=<id>` → `{ items: [...], nextCursor: string | null }`.
-- **Concurrencia:** las mutaciones sobre `pedido`, `comanda` y `sesion_caja` envían `version` en el cuerpo; si no coincide → `409 VERSION_CONFLICT`.
-- **Idempotencia:** `POST` de confirmar, cobrar y abrir/cerrar caja aceptan cabecera `Idempotency-Key` (uuid generado por el cliente); un reintento con la misma clave devuelve la misma respuesta.
+---
 
-### Formato de error
+## 1. Convenciones Globales
 
-```json
-{ "codigo": "STOCK_INSUFICIENTE", "mensaje": "No hay suficiente stock para confirmar el pedido.", "detalles": { "faltantes": [{ "ingredienteId": "…", "nombre": "Tocineta", "requerido": 120, "disponible": 40, "unidad": "G" }] } }
-```
+- **Autenticación:** Cookie de sesión `mb_session` (`HttpOnly`, `SameSite=Strict`).
+- **Seguridad y CSRF:** En métodos mutantes (`POST`, `PATCH`, `PUT`, `DELETE`), el backend valida que la cabecera `Origin` coincida con la variable de entorno `APP_ORIGIN` (o peticiones de mismo origen / health check).
+- **Control de Acceso Basado en Roles (RBAC):**
+  - **`ADMIN`:** Acceso total a administración, catálogo, inventario, pedidos, caja y cocina.
+  - **`CAJERO`:** Acceso a toma de pedidos, catálogo de menú, gestión de mesas, cobro y apertura/cierre de su propia caja.
+  - **`COCINA`:** Acceso exclusivo a la pantalla KDS de comandas.
+  - **`PÚBLICO`:** Endpoints exentos de sesión (`/health`, `/auth/login`).
+- **Identificadores:** UUID v7 (`string` formateado en minúsculas).
+- **Moneda y Dinero:** Enteros en pesos colombianos (**COP**). Sin centavos ni números flotantes (RN-01).
+- **Inventario:** Cantidades enteras en unidad base (`G` para gramos, `ML` para mililitros, `UND` para unidades) (RN-30).
+- **Fechas y Tiempos:** Formato ISO-8601 UTC en la API (`2026-10-06T19:42:10.123Z`). Las fechas operativas siguen el formato `YYYY-MM-DD` (RN-16).
+- **Campos JSON:** Nombres de propiedad en `camelCase` (se transforman a `snake_case` al persistir en base de datos).
+- **Concurrencia:** Endpoints de comandas y caja envían el entero `version` para bloqueo optimista; discrepancias retornan `409 VERSION_CONFLICT`.
 
-| HTTP | `codigo` (ejemplos) |
-|---|---|
-| 400 | `VALIDACION` (detalles: errores Zod por campo) |
-| 401 | `NO_AUTENTICADO` |
-| 403 | `SIN_PERMISO` |
-| 404 | `NO_ENCONTRADO` |
-| 409 | `VERSION_CONFLICT`, `ESTADO_INVALIDO`, `STOCK_INSUFICIENTE`, `MESA_OCUPADA`, `CAJA_NO_ABIERTA`, `PAGOS_NO_CUADRAN` |
-| 429 | `DEMASIADOS_INTENTOS` |
+---
 
-## Endpoints
+## 2. Formato Unificado de Respuestas de Error
 
-Roles: **A** = ADMIN, **C** = CAJERO, **K** = COCINA.
-
-### Identidad
-
-| Método | Ruta | Roles | Descripción |
-|---|---|---|---|
-| POST | `/auth/login` | público | `{ username, password }` → set-cookie + `{ usuario }` |
-| POST | `/auth/logout` | todos | Invalida la sesión |
-| GET | `/auth/me` | todos | Usuario actual + rol |
-| GET | `/usuarios` | A | Lista |
-| POST | `/usuarios` | A | Crear `{ nombre, username, password, rol }` |
-| PATCH | `/usuarios/:id` | A | Editar / activar / desactivar / cambiar contraseña |
-
-### Catálogo
-
-| Método | Ruta | Roles | Descripción |
-|---|---|---|---|
-| GET | `/catalogo/menu` | A C | Categorías activas con productos activos (incluye `agotado`), para el POS |
-| GET/POST | `/categorias` | A | Listar / crear |
-| PATCH | `/categorias/:id` | A | Editar, ordenar, activar |
-| GET/POST | `/productos` | A | Listar (filtros `categoriaId`, `activo`, `sinReceta`) / crear |
-| GET/PATCH | `/productos/:id` | A | Detalle (con receta) / editar |
-| PUT | `/productos/:id/receta` | A | Reemplaza la receta `{ items: [{ ingredienteId, cantidad }] }` |
-| PUT | `/productos/:id/agotado` | A | `{ agotadoManual: true \| false \| null }` |
-
-### Pedidos
-
-| Método | Ruta | Roles | Descripción |
-|---|---|---|---|
-| GET | `/mesas` | A C | Mesas con `ocupada` y `pedidoId` activo |
-| GET | `/pedidos` | A C | Filtros `estado`, `fechaOperativa`, `tipo` |
-| POST | `/pedidos` | A C | Crear `{ tipo, mesaId?, clienteId?, nota? }` → pedido `ABIERTO` |
-| GET | `/pedidos/:id` | A C | Detalle con ítems, totales y estado de comanda |
-| POST | `/pedidos/:id/items` | A C | Agregar `{ productoId, cantidad, nota? }` |
-| PATCH | `/pedidos/:id/items/:itemId` | A C | Cambiar `cantidad` / `nota` |
-| DELETE | `/pedidos/:id/items/:itemId` | A C | Quitar línea |
-| POST | `/pedidos/:id/confirmar` | A C | Envía a cocina (descuenta stock, crea comanda). `{ version }` |
-| POST | `/pedidos/:id/anular` | A | `{ motivo, version }` |
-
-Respuesta de pedido (resumen):
+Cualquier fallo de negocio, validación o autorización devuelve la estructura definida en `@mb/shared/schemas/error.ts`:
 
 ```json
 {
-  "id": "0199b2c4-…", "numeroDia": 14, "fechaOperativa": "2026-10-06",
-  "tipo": "MESA", "mesa": { "id": "…", "nombre": "Mesa 4" },
-  "estado": "CONFIRMADO", "estadoComanda": "EN_PREPARACION",
-  "items": [{ "id": "…", "productoId": "…", "nombre": "Monster Clásica", "precioUnitario": 19900, "cantidad": 2, "nota": "sin cebolla", "totalLinea": 39800 }],
-  "total": 49700, "base": 49700, "impuesto": 0,
-  "version": 3, "createdAt": "2026-10-06T19:40:02.000Z"
+  "codigo": "STOCK_INSUFICIENTE",
+  "mensaje": "No hay suficiente stock para confirmar el pedido.",
+  "detalles": {
+    "faltantes": [
+      {
+        "ingredienteId": "0199b2c4-87a1-7c9b-b530-1c8f12a34567",
+        "nombre": "Tocineta Ahumada",
+        "requerido": 100,
+        "disponible": 40,
+        "unidad": "G"
+      }
+    ]
+  }
 }
 ```
 
-### Cocina
+### Catálogo de Códigos de Error HTTP
 
-| Método | Ruta | Roles | Descripción |
-|---|---|---|---|
-| GET | `/comandas?activas=true` | A C K | Comandas `PENDIENTE`/`EN_PREPARACION`/`LISTA` en orden FIFO |
-| POST | `/comandas/:id/iniciar` | A K | `{ version }` |
-| POST | `/comandas/:id/lista` | A K | `{ version }` |
-| POST | `/comandas/:id/entregar` | A C K | `{ version }` |
-| POST | `/comandas/:id/deshacer` | A K | Revierte la última transición si fue hace ≤ 10 s (RN-22) |
+| Código HTTP | `codigo` en respuesta | Causa típica |
+|---|---|---|
+| `400 Bad Request` | `VALIDACION` | Datos de entrada no cumplen el esquema Zod (`detalles` contiene arreglo de fallos por campo). |
+| `401 Unauthorized` | `NO_AUTENTICADO` / `CREDENCIALES_INVALIDAS` | Ausencia de cookie `mb_session`, sesión expirada o usuario/clave erróneos. |
+| `403 Forbidden` | `SIN_PERMISO` / `ORIGEN_NO_PERMITIDO` | Rol insuficiente para la acción o cabecera `Origin` no coincide con `APP_ORIGIN`. |
+| `404 Not Found` | `NO_ENCONTRADO` | El recurso solicitado por ID no existe en la base de datos. |
+| `409 Conflict` | `ESTADO_INVALIDO` | Transición de estado prohibida por la máquina de estados del pedido o comanda. |
+| `409 Conflict` | `VERSION_CONFLICT` | Conflicto de bloqueo optimista; la versión enviada no coincide con la versión en base de datos. |
+| `409 Conflict` | `STOCK_INSUFICIENTE` | Falta stock en uno o más ingredientes al confirmar el pedido (RN-33). |
+| `409 Conflict` | `CAJA_NO_ABIERTA` | El cajero intenta cobrar sin una sesión de caja activa en estado `ABIERTA` (RN-40). |
+| `409 Conflict` | `PAGOS_NO_CUADRAN` | El monto pagado difiere de `total + propina` (RN-43). |
+| `429 Too Many Requests` | `DEMASIADOS_INTENTOS` | Límite de peticiones excedido (máximo 5 intentos por minuto en login). |
+| `503 Service Unavailable`| `DB_NO_DISPONIBLE` | Fallo de conexión o respuesta del motor PostgreSQL en `/health`. |
 
-### Inventario
+---
 
-| Método | Ruta | Roles | Descripción |
-|---|---|---|---|
-| GET/POST | `/ingredientes` | A | Listar (filtro `stockBajo=true`) / crear |
-| PATCH | `/ingredientes/:id` | A | Editar nombre, mínimo, costo, activo (no el stock) |
-| GET | `/ingredientes/:id/movimientos` | A | Kardex paginado |
-| POST | `/inventario/entradas` | A | `{ items: [{ ingredienteId, cantidad, costoUnitario? }], nota? }` |
-| POST | `/inventario/ajustes` | A | `{ ingredienteId, stockContado, motivo }` → crea `AJUSTE` por la diferencia |
-| POST | `/inventario/mermas` | A | `{ ingredienteId, cantidad, motivo }` |
+## 3. Catálogo de Endpoints Implementados
 
-### Caja
+### 3.1. Salud del Sistema
 
-| Método | Ruta | Roles | Descripción |
-|---|---|---|---|
-| GET | `/caja/sesion-actual` | A C | Sesión abierta del usuario (o `null`) con resumen |
-| POST | `/caja/sesiones` | A C | Abrir `{ montoApertura }` |
-| POST | `/caja/sesiones/:id/movimientos` | A C | `{ tipo: "INGRESO" \| "RETIRO", monto, motivo }` |
-| POST | `/caja/sesiones/:id/cerrar` | A C | `{ efectivoContado, version }` → resumen de cierre |
-| GET | `/caja/sesiones` | A | Historial de cierres |
-| POST | `/caja/cobros` | A C | Cobrar (ver abajo) |
-| GET | `/recibos/:id` | A C | Datos del recibo para imprimir |
+#### `GET /api/v1/health`
+- **Roles:** Público.
+- **Descripción:** Verifica conectividad y operatividad de la base de datos PostgreSQL.
+- **Respuesta (200 OK):**
+  ```json
+  { "status": "ok", "db": "ok" }
+  ```
 
-Cobro:
+---
 
-```json
-// POST /caja/cobros
-{
-  "pedidoId": "…", "pedidoVersion": 3, "propina": 0,
-  "pagos": [
-    { "metodo": "EFECTIVO", "monto": 30000, "recibido": 50000 },
-    { "metodo": "TARJETA", "monto": 19700, "referencia": "VOUCHER-8812" }
+### 3.2. Identidad y Autenticación
+
+#### `POST /api/v1/auth/login`
+- **Roles:** Público (con rate limiting de 5 peticiones/minuto por IP).
+- **Cuerpo (`loginSchema`):**
+  ```json
+  { "username": "admin", "password": "admin123" }
+  ```
+- **Respuesta (200 OK):**
+  Establece la cookie `mb_session` (`HttpOnly; SameSite=Strict`) y retorna:
+  ```json
+  {
+    "usuario": {
+      "id": "0199b2c4-72a1-7c9b-b530-1c8f12a34567",
+      "nombre": "Administrador",
+      "username": "admin",
+      "rol": "ADMIN"
+    }
+  }
+  ```
+
+#### `POST /api/v1/auth/logout`
+- **Roles:** `ADMIN`, `CAJERO`, `COCINA`.
+- **Descripción:** Invalida y elimina la sesión activa en PostgreSQL; borra la cookie en el navegador.
+- **Respuesta:** `204 No Content`.
+
+#### `GET /api/v1/auth/me`
+- **Roles:** `ADMIN`, `CAJERO`, `COCINA`.
+- **Descripción:** Obtiene los datos del usuario autenticado en la sesión actual.
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "usuario": {
+      "id": "0199b2c4-72a1-7c9b-b530-1c8f12a34567",
+      "nombre": "Administrador",
+      "username": "admin",
+      "rol": "ADMIN"
+    }
+  }
+  ```
+
+---
+
+### 3.3. Catálogo de Productos y Menú
+
+#### `GET /api/v1/catalogo/menu`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Obtiene las categorías activas con sus productos activos para la grilla del terminal POS. Incluye el flag reactivo `agotado`.
+- **Respuesta (200 OK):**
+  ```json
+  [
+    {
+      "id": "0199b2c4-1111-7c9b-b530-1c8f12a34567",
+      "nombre": "Hamburguesas",
+      "orden": 1,
+      "productos": [
+        {
+          "id": "0199b2c4-2222-7c9b-b530-1c8f12a34567",
+          "nombre": "Monster Clásica",
+          "descripcion": "150g carne de res, queso cheddar...",
+          "precio": 24900,
+          "imagenUrl": null,
+          "agotado": false,
+          "orden": 1
+        }
+      ]
+    }
   ]
-}
-// 201
-{ "reciboId": "…", "numero": "R-000127", "total": 49700, "propina": 0, "cambio": 20000 }
-```
+  ```
 
-### Clientes
+#### `GET /api/v1/categorias`
+- **Roles:** `ADMIN`.
+- **Descripción:** Lista todas las categorías registradas en el sistema.
 
-| Método | Ruta | Roles | Descripción |
+#### `POST /api/v1/categorias`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`crearCategoriaSchema`):**
+  ```json
+  { "nombre": "Bebidas", "orden": 3, "activa": true }
+  ```
+- **Respuesta:** `201 Created` con el objeto categoría creado.
+
+#### `PATCH /api/v1/categorias/:id`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`editarCategoriaSchema`):** Campos opcionales `nombre`, `orden`, `activa`.
+- **Respuesta (200 OK):** Categoría actualizada.
+
+#### `GET /api/v1/productos`
+- **Roles:** `ADMIN`.
+- **Query:** `?categoriaId=<uuid>&activo=true&sinReceta=false`.
+- **Respuesta (200 OK):** Arreglo de productos con su receta asociada.
+
+#### `POST /api/v1/productos`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`crearProductoSchema`):**
+  ```json
+  {
+    "categoriaId": "0199b2c4-1111-7c9b-b530-1c8f12a34567",
+    "nombre": "Monster Doble Brasa",
+    "descripcion": "Doble carne 150g, queso cheddar",
+    "precio": 32900,
+    "orden": 4,
+    "activo": true
+  }
+  ```
+- **Respuesta:** `201 Created` con el producto creado.
+
+#### `GET /api/v1/productos/:id`
+- **Roles:** `ADMIN`.
+- **Respuesta (200 OK):** Detalle del producto con sus ingredientes de receta.
+
+#### `PATCH /api/v1/productos/:id`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`editarProductoSchema`):** Campos opcionales a modificar (`categoriaId`, `nombre`, `precio`, etc.).
+- **Respuesta (200 OK):** Producto modificado.
+
+#### `PUT /api/v1/productos/:id/receta`
+- **Roles:** `ADMIN`.
+- **Descripción:** Reemplaza atómicamente la lista de ingredientes que componen el producto.
+- **Cuerpo (`actualizarRecetaSchema`):**
+  ```json
+  {
+    "items": [
+      { "ingredienteId": "0199b2c4-3333-7c9b-b530-1c8f12a34567", "cantidad": 1 },
+      { "ingredienteId": "0199b2c4-4444-7c9b-b530-1c8f12a34567", "cantidad": 150 }
+    ]
+  }
+  ```
+- **Respuesta (200 OK):** Producto con la nueva receta.
+
+#### `PUT /api/v1/productos/:id/agotado`
+- **Roles:** `ADMIN`.
+- **Descripción:** Fuerza o libera la disponibilidad manual de un producto (override sobre el cálculo de stock).
+- **Cuerpo (`actualizarAgotadoManualSchema`):**
+  ```json
+  { "agotadoManual": true }
+  ```
+  *(Permite `true`, `false` o `null` para retornar al cálculo automático por stock).*
+- **Respuesta (200 OK):** Producto actualizado.
+
+---
+
+### 3.4. Clientes
+
+#### `GET /api/v1/clientes`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Query:** `?q=<filtro>&limit=20&cursor=<uuid>`.
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "items": [
+      {
+        "id": "0199b2c4-5555-7c9b-b530-1c8f12a34567",
+        "nombre": "Carlos Restrepo",
+        "telefono": "3001234567",
+        "documento": "1047234567",
+        "email": "carlos@example.com",
+        "createdAt": "2026-10-06T12:00:00.000Z",
+        "updatedAt": "2026-10-06T12:00:00.000Z"
+      }
+    ],
+    "nextCursor": null
+  }
+  ```
+
+#### `POST /api/v1/clientes`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Cuerpo (`crearClienteSchema`):**
+  ```json
+  {
+    "nombre": "Carlos Restrepo",
+    "telefono": "3001234567",
+    "documento": "1047234567",
+    "email": "carlos@example.com"
+  }
+  ```
+- **Respuesta:** `201 Created` con el cliente registrado.
+
+---
+
+### 3.5. Mesas
+
+#### `GET /api/v1/mesas`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Lista todas las mesas con su capacidad y su estado de ocupación actual en vivo (`ocupada: boolean`, `pedidoId: string | null`).
+- **Respuesta (200 OK):**
+  ```json
+  [
+    {
+      "id": "0199b2c4-6666-7c9b-b530-1c8f12a34567",
+      "nombre": "Mesa 1",
+      "capacidad": 4,
+      "activa": true,
+      "orden": 1,
+      "ocupada": true,
+      "pedidoId": "0199b2c4-7777-7c9b-b530-1c8f12a34567"
+    }
+  ]
+  ```
+
+#### `POST /api/v1/mesas`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`crearMesaSchema`):** `{ "nombre": "Mesa 5", "capacidad": 6, "activa": true, "orden": 5 }`.
+- **Respuesta:** `201 Created`.
+
+#### `GET /api/v1/mesas/:id`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Respuesta (200 OK):** Datos de la mesa.
+
+#### `PATCH /api/v1/mesas/:id`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`editarMesaSchema`):** Campos opcionales a modificar (`nombre`, `capacidad`, `activa`, `orden`).
+- **Respuesta (200 OK):** Mesa actualizada.
+
+#### `PUT /api/v1/mesas/orden`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`reordenarMesasSchema`):** `{ "orden": [{ "id": "...", "orden": 1 }, { "id": "...", "orden": 2 }] }`.
+- **Respuesta (200 OK):** Lista de mesas reordenadas.
+
+---
+
+### 3.6. Pedidos (POS)
+
+#### `GET /api/v1/pedidos`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Query:** `?estado=ABIERTO&fechaOperativa=2026-10-06&tipo=MESA&limit=50&cursor=<uuid>`.
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "items": [ /* Lista de pedidos */ ],
+    "nextCursor": null
+  }
+  ```
+
+#### `POST /api/v1/pedidos`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Crea un pedido en estado inicial `ABIERTO` asignado al usuario en sesión.
+- **Cuerpo (`crearPedidoSchema`):**
+  ```json
+  {
+    "tipo": "MESA",
+    "mesaId": "0199b2c4-6666-7c9b-b530-1c8f12a34567",
+    "clienteId": null,
+    "nota": "Mesa junto a la ventana"
+  }
+  ```
+  *(Si `tipo` es `LLEVAR`, `mesaId` debe ser omitido o nulo).*
+- **Respuesta:** `201 Created` con el pedido creado en estado `ABIERTO`.
+
+#### `GET /api/v1/pedidos/:id`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "id": "0199b2c4-7777-7c9b-b530-1c8f12a34567",
+    "fechaOperativa": "2026-10-06",
+    "numeroDia": 14,
+    "tipo": "MESA",
+    "mesaId": "0199b2c4-6666-7c9b-b530-1c8f12a34567",
+    "mesa": { "id": "0199b2c4-6666-7c9b-b530-1c8f12a34567", "nombre": "Mesa 1" },
+    "clienteId": null,
+    "usuarioId": "0199b2c4-72a1-7c9b-b530-1c8f12a34567",
+    "estado": "ABIERTO",
+    "items": [
+      {
+        "id": "0199b2c4-8888-7c9b-b530-1c8f12a34567",
+        "productoId": "0199b2c4-2222-7c9b-b530-1c8f12a34567",
+        "nombreProducto": "Monster Clásica",
+        "precioUnitario": 24900,
+        "cantidad": 2,
+        "nota": "Sin cebolla",
+        "totalLinea": 49800,
+        "orden": 1
+      }
+    ],
+    "total": 49800,
+    "base": 49800,
+    "impuesto": 0,
+    "nota": "Mesa junto a la ventana",
+    "estadoComanda": null,
+    "version": 2,
+    "createdAt": "2026-10-06T19:40:02.000Z"
+  }
+  ```
+
+#### `POST /api/v1/pedidos/:id/items`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Agrega una línea de producto al ticket en estado `ABIERTO`. Toma snapshot de nombre y precio vigente (RN-05).
+- **Cuerpo (`agregarPedidoItemSchema`):**
+  ```json
+  {
+    "productoId": "0199b2c4-2222-7c9b-b530-1c8f12a34567",
+    "cantidad": 1,
+    "nota": "Término medio"
+  }
+  ```
+- **Respuesta:** `201 Created` con el pedido recalculado.
+
+#### `PATCH /api/v1/pedidos/:id/items/:itemId`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Cuerpo (`editarPedidoItemSchema`):** `{ "cantidad": 3, "nota": "Bien asada" }`.
+- **Respuesta (200 OK):** Pedido recalculado.
+
+#### `DELETE /api/v1/pedidos/:id/items/:itemId`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Remueve la línea del pedido en estado `ABIERTO`.
+- **Respuesta (200 OK):** Pedido recalculado.
+
+#### `POST /api/v1/pedidos/:id/confirmar`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Ejecuta la confirmación del pedido en una única transacción de base de datos:
+  1. Valida que el pedido tenga al menos 1 ítem (RN-12) y esté en estado `ABIERTO`.
+  2. Adquiere bloqueo pesimista `SELECT ... FOR UPDATE` sobre los ingredientes en orden de ID (RN-32).
+  3. Descuenta inventario registrando movimientos de tipo `CONSUMO`. Si falta stock, arroja `409 STOCK_INSUFICIENTE` (RN-33).
+  4. Crea la comanda en cocina en estado `PENDIENTE` (RN-20).
+  5. Cambia el estado del pedido a `CONFIRMADO` y publica el evento `PedidoConfirmado` en `evento_sistema`.
+- **Respuesta (200 OK):** Pedido en estado `CONFIRMADO`.
+
+---
+
+### 3.7. Cocina (KDS)
+
+#### `GET /api/v1/comandas`
+- **Roles:** `ADMIN`, `CAJERO`, `COCINA`.
+- **Query:** `?activas=true` (filtra estados `PENDIENTE`, `EN_PREPARACION`, `LISTA`).
+- **Respuesta (200 OK):**
+  ```json
+  [
+    {
+      "id": "0199b2c4-9999-7c9b-b530-1c8f12a34567",
+      "pedidoId": "0199b2c4-7777-7c9b-b530-1c8f12a34567",
+      "numeroDia": 14,
+      "tipoPedido": "MESA",
+      "mesaNombre": "Mesa 1",
+      "estado": "PENDIENTE",
+      "iniciadaAt": null,
+      "listaAt": null,
+      "entregadaAt": null,
+      "items": [
+        {
+          "id": "0199b2c4-aaaa-7c9b-b530-1c8f12a34567",
+          "nombre": "Monster Clásica",
+          "cantidad": 2,
+          "nota": "Sin cebolla"
+        }
+      ],
+      "version": 0,
+      "createdAt": "2026-10-06T19:42:00.000Z"
+    }
+  ]
+  ```
+
+#### `POST /api/v1/comandas/:id/iniciar`
+- **Roles:** `ADMIN`, `COCINA`.
+- **Cuerpo (`transicionComandaSchema`):** `{ "version": 0 }`.
+- **Transición:** `PENDIENTE` → `EN_PREPARACION`. Registra `iniciada_at` y publica `ComandaIniciada`.
+- **Respuesta (200 OK):** Comanda actualizada.
+
+#### `POST /api/v1/comandas/:id/lista`
+- **Roles:** `ADMIN`, `COCINA`.
+- **Cuerpo (`transicionComandaSchema`):** `{ "version": 1 }`.
+- **Transición:** `EN_PREPARACION` → `LISTA`. Registra `lista_at` y publica `ComandaLista`.
+- **Respuesta (200 OK):** Comanda actualizada.
+
+#### `POST /api/v1/comandas/:id/entregar`
+- **Roles:** `ADMIN`, `CAJERO`, `COCINA`.
+- **Cuerpo (`transicionComandaSchema`):** `{ "version": 2 }`.
+- **Transición:** `LISTA` → `ENTREGADA`. Registra `entregada_at` y publica `ComandaEntregada`.
+- **Respuesta (200 OK):** Comanda finalizada.
+
+---
+
+### 3.8. Inventario
+
+#### `GET /api/v1/ingredientes`
+- **Roles:** `ADMIN`.
+- **Query:** `?stockBajo=true&limit=50&cursor=<uuid>`.
+- **Respuesta (200 OK):** Arreglo de ingredientes con stock actual, mínimo y costo unitario.
+
+#### `POST /api/v1/ingredientes`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`crearIngredienteSchema`):**
+  ```json
+  {
+    "nombre": "Pan Brioche",
+    "unidad": "UND",
+    "stockMinimo": 40,
+    "costoUnitario": 1500000,
+    "activo": true
+  }
+  ```
+- **Respuesta:** `201 Created`.
+
+#### `PATCH /api/v1/ingredientes/:id`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`editarIngredienteSchema`):** Campos editables de catálogo (`nombre`, `unidad`, `stockMinimo`, `costoUnitario`, `activo`).  
+  *(El stock actual **nunca** se edita directamente; solo mediante movimientos, RN-34).*
+- **Respuesta (200 OK):** Ingrediente modificado.
+
+#### `GET /api/v1/ingredientes/:id/movimientos`
+- **Roles:** `ADMIN`.
+- **Descripción:** Kardex auditable del ingrediente con paginación cursor.
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "items": [
+      {
+        "id": "0199b2c4-bbbb-7c9b-b530-1c8f12a34567",
+        "ingredienteId": "0199b2c4-3333-7c9b-b530-1c8f12a34567",
+        "tipo": "CONSUMO",
+        "cantidad": -150,
+        "stockResultante": 29850,
+        "referenciaTipo": "PEDIDO",
+        "referenciaId": "0199b2c4-7777-7c9b-b530-1c8f12a34567",
+        "usuarioId": "0199b2c4-72a1-7c9b-b530-1c8f12a34567",
+        "motivo": null,
+        "createdAt": "2026-10-06T19:42:00.000Z"
+      }
+    ],
+    "nextCursor": null
+  }
+  ```
+
+#### `POST /api/v1/inventario/entradas`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`crearEntradaInventarioSchema`):**
+  ```json
+  {
+    "items": [
+      { "ingredienteId": "0199b2c4-3333-7c9b-b530-1c8f12a34567", "cantidad": 5000, "costoUnitario": 35000 }
+    ],
+    "nota": "Compra factura F-8921"
+  }
+  ```
+- **Respuesta:** `201 Created` con los movimientos de entrada generados.
+
+#### `POST /api/v1/inventario/ajustes`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`crearAjusteInventarioSchema`):**
+  ```json
+  {
+    "ingredienteId": "0199b2c4-3333-7c9b-b530-1c8f12a34567",
+    "stockContado": 29500,
+    "motivo": "Ajuste tras conteo físico semanal"
+  }
+  ```
+- **Respuesta:** `201 Created` con el movimiento de tipo `AJUSTE` por la diferencia.
+
+#### `POST /api/v1/inventario/mermas`
+- **Roles:** `ADMIN`.
+- **Cuerpo (`crearMermaInventarioSchema`):**
+  ```json
+  {
+    "ingredienteId": "0199b2c4-3333-7c9b-b530-1c8f12a34567",
+    "cantidad": 300,
+    "motivo": "Carne quemada en parrilla durante prueba"
+  }
+  ```
+- **Respuesta:** `201 Created` con el movimiento de tipo `MERMA`.
+
+---
+
+### 3.9. Caja y Cobros
+
+#### `GET /api/v1/caja/sesion-actual`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Consulta si el usuario autenticado tiene una sesión de caja `ABIERTA`.
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "id": "0199b2c4-cccc-7c9b-b530-1c8f12a34567",
+    "usuarioId": "0199b2c4-72a1-7c9b-b530-1c8f12a34567",
+    "estado": "ABIERTA",
+    "montoApertura": 150000,
+    "ventasEfectivo": 49800,
+    "abiertaAt": "2026-10-06T15:00:00.000Z",
+    "version": 0
+  }
+  ```
+  *(Retorna `null` si no hay sesión abierta).*
+
+#### `POST /api/v1/caja/sesiones`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Abre una nueva sesión de caja (RN-40, RN-41).
+- **Cuerpo (`abrirSesionCajaSchema`):**
+  ```json
+  { "montoApertura": 150000 }
+  ```
+- **Respuesta:** `201 Created` con la sesión abierta.
+
+#### `POST /api/v1/caja/sesiones/:id/cerrar`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Cierra la sesión de caja, calcula la diferencia entre efectivo contado y esperado, y publica `SesionCajaCerrada` (RN-47).
+- **Cuerpo (`cerrarSesionCajaSchema`):**
+  ```json
+  { "efectivoContado": 199800 }
+  ```
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "sesionId": "0199b2c4-cccc-7c9b-b530-1c8f12a34567",
+    "montoApertura": 150000,
+    "ventasEfectivo": 49800,
+    "ingresos": 0,
+    "retiros": 0,
+    "efectivoEsperado": 199800,
+    "efectivoContado": 199800,
+    "diferencia": 0,
+    "cerradaAt": "2026-10-06T23:30:00.000Z"
+  }
+  ```
+
+#### `POST /api/v1/caja/cobros`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Ejecuta el cobro del pedido en una única transacción:
+  1. Si el pedido estaba en `ABIERTO`, lo confirma (descontando stock y creando comanda de forma atómica, RN-44).
+  2. Valida la sesión de caja abierta y que el monto total coincida exactamente con `total + propina` (RN-43).
+  3. Inserta el `recibo` y el desglose de `pago`.
+  4. Cierra el pedido (`estado = 'CERRADO'`).
+  5. Publica `PedidoCobrado` en `evento_sistema`.
+- **Cuerpo (`cobroSchema`):**
+  ```json
+  {
+    "pedidoId": "0199b2c4-7777-7c9b-b530-1c8f12a34567",
+    "propina": 4900,
+    "pagos": [
+      {
+        "metodo": "EFECTIVO",
+        "monto": 54700,
+        "recibido": 60000
+      }
+    ]
+  }
+  ```
+  *(En el MVP actual se restringe estrictamente a un único método de pago por cobro).*
+- **Respuesta:** `201 Created`
+  ```json
+  {
+    "reciboId": "0199b2c4-dddd-7c9b-b530-1c8f12a34567",
+    "numero": "R-000014",
+    "total": 49800,
+    "propina": 4900,
+    "cambio": 5300
+  }
+  ```
+
+#### `GET /api/v1/recibos/:id`
+- **Roles:** `ADMIN`, `CAJERO`.
+- **Descripción:** Devuelve la información completa del recibo para el formato de impresión térmica de 80 mm (RN-45). Incluye los ítems facturados, desglose tributario y leyendas legales ("Documento no fiscal", "No responsable de INC").
+
+---
+
+### 3.10. Administración
+
+#### `GET /api/v1/admin/dashboard`
+- **Roles:** `ADMIN`.
+- **Query:** `?fecha=YYYY-MM-DD` (opcional, por defecto fecha operativa en curso).
+- **Respuesta (200 OK):**
+  Consolida en una sola respuesta las métricas clave de la operación a partir de las vistas SQL de base de datos:
+  ```json
+  {
+    "fechaOperativa": "2026-10-06",
+    "kpis": {
+      "totalVentas": 1245000,
+      "totalPedidos": 42,
+      "ticketPromedio": 29643,
+      "tiempoPromedioCocinaSeg": 480
+    },
+    "ventasPorHora": [
+      { "hora": 18, "total": 350000, "pedidos": 10 }
+    ],
+    "topProductos": [
+      { "productoId": "...", "nombre": "Monster Bacon", "unidades": 28, "monto": 809200 }
+    ],
+    "tiemposCocina": {
+      "promedioSeg": 480,
+      "p90Seg": 650,
+      "comandas": 42
+    },
+    "alertas": {
+      "ingredientesBajos": [
+        { "ingredienteId": "...", "nombre": "Pan Brioche", "unidad": "UND", "stockActual": 12, "stockMinimo": 40 }
+      ],
+      "productosAgotados": []
+    }
+  }
+  ```
+
+#### `GET /api/v1/admin/eventos`
+- **Roles:** `ADMIN`.
+- **Query:** `?cursor=<id>`.
+- **Descripción:** Consulta la bitácora inmutable de eventos del sistema (`evento_sistema`) para auditoría y visualización de interacciones entre subsistemas.
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "items": [
+      {
+        "id": 1842,
+        "tipo": "PedidoConfirmado",
+        "modulo": "pedidos",
+        "agregadoId": "0199b2c4-7777-7c9b-b530-1c8f12a34567",
+        "usuarioId": "0199b2c4-72a1-7c9b-b530-1c8f12a34567",
+        "payload": { "comandaId": "...", "numeroDia": 14 },
+        "createdAt": "2026-10-06T19:42:00.000Z"
+      }
+    ],
+    "nextCursor": 1792
+  }
+  ```
+
+---
+
+### 3.11. Tiempo Real — Server-Sent Events (SSE)
+
+#### `GET /api/v1/stream`
+- **Roles:** Requiere sesión autenticada.
+- **Query:** `?canales=cocina,pos,admin` *(si se omite, se suscriben todos los canales permitidos para el rol del usuario según `CANALES_POR_ROL`)*.
+- **Cabeceras de respuesta:**
+  - `Content-Type: text/event-stream`
+  - `Cache-Control: no-cache`
+  - `Connection: keep-alive`
+  - `X-Accel-Buffering: no`
+
+#### Matriz de Eventos SSE y Canales
+
+| Evento SSE (`event:`) | Evento Dominio Origen | Canales | Efecto en Frontend |
 |---|---|---|---|
-| GET | `/clientes?q=` | A C | Buscar por nombre/teléfono/documento |
-| POST | `/clientes` | A C | Crear |
+| `comanda.nueva` | `PedidoConfirmado` | `cocina`, `pos` | KDS agrega comanda a columna Pendiente; POS actualiza estado. |
+| `comanda.estado` | `ComandaIniciada`, `ComandaLista`, `ComandaEntregada` | `cocina`, `pos` | KDS avanza tarjeta; POS notifica pedido listo. |
+| `comanda.anulada` | `PedidoAnulado` | `cocina`, `pos` | KDS retira tarjeta. |
+| `pedido.cobrado` | `PedidoCobrado` | `pos`, `admin` | POS libera ticket y mesa; Admin actualiza KPIs en vivo. |
+| `inventario.alerta` | `StockBajoMinimo`, `IngredienteAgotado` | `admin` | Admin muestra toast/alerta de reposición requerida. |
+| `catalogo.disponibilidad` | `IngredienteRepuesto`, `CatalogoDisponibilidadCambiado` | `pos`, `admin` | POS refresca menú (`['menu']`) habilitando/deshabilitando botones. |
+| `sesion.iniciada` | `SesionIniciada` | `admin` | Registro de actividad. |
+| `sesion.cerrada` | `SesionCerrada` | `admin` | Registro de cierre de sesión. |
 
-### Administración
+#### Reanudación y Reconexión
+El cliente envía la cabecera `Last-Event-ID` (o query param `?lastEventId=<id>`). Si la conexión se interrumpe temporalmente, el servidor recupera del búfer circular y de la base de datos todos los eventos emitidos con ID superior al último recibido y los despacha de forma inmediata antes de continuar con la emisión en vivo.
 
-| Método | Ruta | Roles | Descripción |
-|---|---|---|---|
-| GET | `/admin/dashboard?fecha=` | A | KPIs, ventas por hora, top productos, tiempos de cocina |
-| GET | `/admin/alertas` | A | Stock bajo, agotados, productos auto-desactivados, pedidos olvidados |
-| GET | `/admin/reportes/ventas?desde=&hasta=&agrupar=dia\|producto\|categoria\|metodo` | A | Reporte de ventas |
-| GET | `/admin/eventos?tipo=&modulo=&cursor=` | A | Bitácora de interacciones (`evento_sistema`) |
-| GET/PUT | `/admin/configuracion` | A | Parámetros (impuesto, propina, umbrales, datos del negocio) |
+---
 
-## Tiempo real — SSE
+## 4. Endpoints y Funcionalidades Fuera del Alcance del MVP (Backlog)
 
-`GET /api/v1/stream?canales=cocina,pos,admin` (`text/event-stream`, requiere sesión; canales filtrados por rol).
+Los siguientes endpoints fueron previstos en las etapas de diseño preliminares pero **no están implementados** en el código del MVP actual:
 
-```
-id: 1842
-event: comanda.nueva
-data: {"comandaId":"…","pedidoId":"…","numeroDia":15}
-
-: heartbeat
-```
-
-| `event` | Canales | Origen | Acción en el front |
-|---|---|---|---|
-| `comanda.nueva` | cocina, pos | `PedidoConfirmado` | invalidar `['comandas']`, `['pedidos']` |
-| `comanda.estado` | cocina, pos | `ComandaIniciada/Lista/Entregada` | invalidar; toast "Pedido #014 listo" en POS |
-| `comanda.anulada` | cocina, pos | `PedidoAnulado` | invalidar |
-| `pedido.cobrado` | pos, admin | `PedidoCobrado` | invalidar `['pedidos']`, `['dashboard']` |
-| `inventario.alerta` | admin | `StockBajoMinimo`, `IngredienteAgotado` | invalidar `['alertas']`; toast |
-| `catalogo.disponibilidad` | pos, admin | cambio de `agotado` | invalidar `['menu']` |
-
-El `id` es `evento_sistema.id`; al reconectar, el navegador envía `Last-Event-ID` y el servidor reenvía lo pendiente.
+1. **Gestión de Usuarios (`/usuarios`):** El CRUD de usuarios se encuentra reservado para v1.1; en el MVP los usuarios se configuran mediante el script semilla (`pnpm --filter api db:seed`).
+2. **Anular Pedidos (`POST /pedidos/:id/anular`):** La anulación de pedidos y reversión/merma automática en cocina no cuenta con endpoint expuesto en `pedidos.controller.ts`.
+3. **Deshacer Transición de Comanda (`POST /comandas/:id/deshacer`):** La ventana de reversión de 10 segundos en cocina no está implementada en el controlador.
+4. **Movimientos de Caja Manuales (`POST /caja/sesiones/:id/movimientos`):** Ingresos y retiros manuales no están implementados en el servicio ni en el controlador de caja.
+5. **Historial de Cierres de Caja (`GET /caja/sesiones`):** Consulta histórica de arqueos de caja diferida.
+6. **Pagos Mixtos en Cobro:** `POST /caja/cobros` valida estrictamente un único método de pago en el MVP.
+7. **Configuración y Reportes Avanzados (`/admin/configuracion`, `/admin/reportes/ventas`):** La edición dinámica de parámetros del negocio y reportes agrupados por rango de fechas están planificados para hitos posteriores.

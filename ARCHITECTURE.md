@@ -1,280 +1,337 @@
-# Arquitectura — MonsterBurguer POS
+# Arquitectura del Sistema — MonsterBurguer POS
 
-> Documento vivo. Toda decisión que cambie lo aquí descrito se registra en la sección [Decisiones](#11-decisiones-adr).
+> **Documento vivo de arquitectura de software.**  
+> Basado en principios de arquitectura de software, el Enfoque de Sistemas del documento académico original (*Etapa 1 — Definición del Sistema*) y reflejo fidedigno del código fuente implementado en el repositorio.
 
-## 1. Visión general
+---
 
-**Monolito modular en TypeScript**: un solo backend desplegable (NestJS) dividido en módulos con fronteras estrictas, una SPA (React) y PostgreSQL. Los módulos corresponden 1:1 a los subsistemas definidos en el documento de Enfoque de Sistemas, y las interacciones entre ellos ocurren por **servicios públicos** y **eventos de dominio**, nunca accediendo a tablas ajenas.
+## 1. Visión General y Estilo Arquitectónico
 
-```
-            ┌──────────────────────── Navegadores (LAN del restaurante) ─────────────────────────┐
-            │  Tablet/PC caja (POS)      Pantalla cocina (KDS)       PC admin (Dashboard)        │
-            └──────────────┬──────────────────────┬─────────────────────────┬───────────────────┘
-                           │ HTTPS (REST + SSE, cookie de sesión)            │
-                    ┌──────▼─────────────────────────────────────────────────▼──────┐
-                    │  nginx  — sirve apps/web (estático) y proxy /api → api        │
-                    └──────────────────────────────┬────────────────────────────────┘
-                    ┌──────────────────────────────▼────────────────────────────────┐
-                    │  apps/api (NestJS)                                            │
-                    │  ┌──────────┐ ┌─────────┐ ┌────────┐ ┌──────────┐ ┌────────┐  │
-                    │  │ catalogo │ │ pedidos │ │ cocina │ │inventario│ │  caja  │  │
-                    │  └──────────┘ └─────────┘ └────────┘ └──────────┘ └────────┘  │
-                    │  ┌──────────┐ ┌──────────────┐ ┌──────────┐ ┌──────────────┐  │
-                    │  │ clientes │ │administracion│ │ identidad│ │  realtime    │  │
-                    │  └──────────┘ └──────────────┘ └──────────┘ └──────────────┘  │
-                    │  shared-kernel: db, eventos, dinero, errores, reloj            │
-                    └──────────────────────────────┬────────────────────────────────┘
-                                          ┌────────▼────────┐
-                                          │ PostgreSQL 18   │
-                                          └─────────────────┘
-```
+MonsterBurguer POS es un **Monolito Modular Full-Stack en TypeScript**:
+- Un único servicio backend desplegable construido con **NestJS 12**, dividido en módulos independientes con fronteras estrictas.
+- Una interfaz web de usuario SPA construida con **React 19**, **Vite 8** y **Tailwind CSS v4**.
+- Un único motor de base de datos relacional **PostgreSQL 17** (desarrollo local) / compatible **PG 18** (producción en Docker).
+- Módulos organizados 1:1 con los subsistemas definidos en el Enfoque de Sistemas: cada subsistema es un módulo de código y cada interacción entre ellos es un evento de dominio transaccional o una invocación explícita mediante una fachada pública (`*.public.ts`).
 
-## 2. Stack
+---
 
-| Capa | Tecnología | Motivo |
-|---|---|---|
-| Lenguaje | **TypeScript 6.0** (strict) en todo el repo | Un solo lenguaje; tipos compartidos front/back |
-| Runtime | **Node.js 24 LTS** | LTS vigente |
-| Backend | **NestJS 12** | Módulos, DI y guards encajan con un monolito modular; muy documentado |
-| ORM / SQL | **Drizzle ORM** + `drizzle-kit` (migraciones SQL versionadas) | SQL-first, tipado, soporta `SELECT … FOR UPDATE` y transacciones explícitas (crítico para stock y dinero) |
-| Validación | **Zod 4** (esquemas en `@mb/shared`) | Mismo esquema valida en el formulario y en la API |
-| Base de datos | **PostgreSQL 17 (dev) / compatible 18** | Ver [ADR-002](#11-decisiones-adr) |
-| Auth | Sesiones opacas en Postgres + cookie `HttpOnly`, hash **argon2id** | Revocación inmediata, funciona con SSE, sin complejidad JWT |
-| Tiempo real | **SSE** (`@Sse()` de NestJS) | KDS y caja solo necesitan recibir; acciones van por REST |
-| Logs | **pino** (`nestjs-pino`) | JSON estructurado, rápido |
-| Frontend | **React 19 + Vite 8 + React Router 8** | SPA rápida; el POS no necesita SSR/SEO |
-| Datos servidor (front) | **TanStack Query** | Caché, reintentos, invalidación por eventos SSE |
-| Estado local (front) | **Zustand** | Ticket en curso del POS |
-| UI | **Tailwind CSS v4 + shadcn/ui + lucide-react** | Componentes accesibles (Radix) y propios |
-| Formularios | **react-hook-form + zod** | Validación compartida |
-| Gráficos | **Recharts** | Dashboard |
-| Tests | **Vitest 5**, **PostgreSQL dedicado (`DATABASE_URL_TEST`)**, **Playwright** (E2E) | |
-| Monorepo | **pnpm workspaces** | Sin herramientas extra |
-| Calidad | ESLint + Prettier, `tsc --noEmit`, Husky + lint-staged | |
-| Infra | Docker Compose, GitHub Actions | |
+## 2. Modelo C4
 
-## 3. Estructura del monorepo
+### 2.1. Nivel 1: Diagrama de Contexto (C4-Context)
+Describe cómo el sistema interactúa con los distintos actores del restaurante y el entorno operativo en la red local.
 
-```
-apps/
-  api/
-    src/
-      main.ts
-      app.module.ts
-      shared-kernel/          # db (drizzle client, tx), eventos, dinero, errores, reloj
-      modules/
-        identidad/            # usuarios, login, sesiones, roles
-        catalogo/             # categorías, productos, recetas, disponibilidad
-        clientes/
-        pedidos/              # pedidos, items, mesas
-        cocina/               # comandas, estados de preparación
-        inventario/           # ingredientes, movimientos, alertas
-        caja/                 # sesiones de caja, cobros, recibos, pagos
-        administracion/       # dashboard, reportes, reglas de retroalimentación
-        realtime/             # hub SSE
-    drizzle/                  # migraciones SQL generadas
-    test/                     # integración (Testcontainers)
-  web/
-    src/
-      app/                    # router, providers, layout por rol
-      features/               # pos/, cocina/, inventario/, caja/, admin/, auth/
-      components/ui/          # shadcn/ui
-      lib/                    # api client, sse, formato de moneda
-packages/
-  shared/
-    src/
-      schemas/                # zod: pedido, producto, pago, …
-      money.ts                # cálculo de impuestos y totales (puro, testeado)
-      enums.ts                # estados, roles, métodos de pago
+```mermaid
+flowchart TD
+    subgraph Actores["Personal del Restaurante"]
+        Cajero["Cajero / Mostrador<br>Toma pedidos, cobra, abre y cierra caja"]
+        Cocinero["Personal de Cocina<br>Ve el KDS y avanza las comandas"]
+        Admin["Administrador / Dueño<br>Supervisa métricas, gestiona menú e inventario"]
+        Cliente["Comensal / Cliente<br>Pide en mostrador y recibe recibo no fiscal"]
+    end
+
+    subgraph Sistema["Sistema MonsterBurguer POS"]
+        POS["MonsterBurguer POS<br>Monolito modular + SPA<br>Pedidos, comandas en tiempo real, inventario y cobros"]
+    end
+
+    subgraph Perifericos["Periféricos locales"]
+        Impresora["Impresora térmica 80 mm<br>Recibo vía diálogo de impresión del navegador"]
+    end
+
+    Cajero -->|"Toma pedidos y cobra (LAN)"| POS
+    Cocinero -->|"Consulta y cambia estados de comandas"| POS
+    Admin -->|"Revisa KPIs, ajusta stock y menú"| POS
+    Cliente -->|"Hace el pedido y paga"| Cajero
+    POS -->|"Genera el recibo de cobro"| Impresora
+    Impresora -->|"Entrega el ticket impreso"| Cliente
 ```
 
-### Estructura interna de un módulo (backend)
+---
 
-```
-modules/pedidos/
-  pedidos.module.ts
-  pedidos.controller.ts        # HTTP: valida con zod, delega al servicio
-  pedidos.service.ts           # casos de uso (transacciones)
-  pedidos.repository.ts        # queries Drizzle — solo tablas de este módulo
-  pedidos.schema.ts            # tablas Drizzle de este módulo
-  pedidos.events.ts            # eventos que publica
-  pedidos.public.ts            # API pública para otros módulos (único import permitido)
-  pedidos.service.spec.ts
-```
+### 2.2. Nivel 2: Diagrama de Contenedores (C4-Container)
+Ilustra los contenedores ejecutables, tecnologías y protocolos de comunicación en la LAN del restaurante.
 
-**Reglas de frontera** (verificadas con `dependency-cruiser` en CI):
-- Un módulo solo importa de otro módulo su `*.public.ts`.
-- Un módulo solo consulta sus propias tablas. Las FK entre módulos existen en la BD (integridad), pero las lecturas cruzadas pasan por la API pública.
-- `shared-kernel` no importa de ningún módulo.
+```mermaid
+flowchart TD
+    subgraph Clientes["Navegadores en terminales de la LAN (misma SPA, rutas por rol)"]
+        WebPOS["Tablet / PC Mostrador<br>React 19 SPA<br>Rutas /pos y /caja"]
+        WebKDS["Monitor / TV Cocina<br>React 19 SPA<br>Ruta /cocina"]
+        WebAdmin["PC Administración<br>React 19 SPA<br>Ruta /admin"]
+    end
 
-## 4. Mapa de subsistemas → módulos
+    subgraph ServidorLocal["Servidor local del restaurante (Docker Compose)"]
+        Nginx["monsterburguer-nginx<br>Nginx<br>Sirve la SPA y hace proxy de /api/ en el puerto 80"]
+        API["monsterburguer-api<br>NestJS 12 sobre Node.js 24<br>Lógica de negocio, EventBus y hub SSE en el puerto 3000"]
+        DB[("monsterburguer-postgres<br>PostgreSQL 18 en Docker, 17 en local<br>Datos, outbox evento_sistema y vistas v_* en el puerto 5432")]
+    end
 
-| Subsistema (documento) | Módulo | Responsabilidad en MVP |
-|---|---|---|
-| Clientes | `clientes` | Registro opcional del cliente en el pedido |
-| Productos | `catalogo` | Menú, precios, recetas, disponibilidad (agotado) |
-| Pedidos | `pedidos` | Crear, editar, confirmar, anular pedidos; mesas |
-| Cocina | `cocina` | Comandas y su ciclo de preparación (KDS) |
-| Inventario | `inventario` | Stock por ingrediente, consumo por receta, entradas, ajustes, alertas |
-| Facturación | `caja` | Sesión de caja, cobro, pagos, recibo POS |
-| Administración | `administracion` | Dashboard, reportes, reglas de retroalimentación |
-| Empleados | `identidad` | Usuarios, roles, autenticación |
-| — (transversal) | `realtime` | Difusión SSE de eventos a pantallas |
+    WebPOS -->|"HTTP REST y SSE, cookie mb_session"| Nginx
+    WebKDS -->|"HTTP REST y SSE, cookie mb_session"| Nginx
+    WebAdmin -->|"HTTP REST y SSE, cookie mb_session"| Nginx
 
-## 5. Interacción entre módulos: eventos de dominio
-
-Dos tipos de reacción a un evento, según si debe ser **atómica** con la operación que lo produce:
-
-1. **Handlers transaccionales (síncronos, misma transacción).** Si fallan, se revierte todo. Se usan cuando el negocio no tolera un estado intermedio (p. ej. un pedido confirmado sin comanda o sin descuento de stock).
-2. **Handlers post-commit (asíncronos).** Se ejecutan después del `COMMIT`. Se usan para notificaciones, SSE, estadísticas y reglas de retroalimentación. Si fallan se reintentan desde la tabla `evento_sistema` (outbox).
-
-Todo evento se persiste en `evento_sistema` **dentro de la misma transacción** (outbox + bitácora de interacciones). Esa tabla es la que Administración usa para mostrar "cómo interactúan los subsistemas".
-
-### Implementación
-
-```ts
-// shared-kernel/events
-export interface EventoDominio<T = unknown> {
-  tipo: string;
-  modulo: string;
-  agregadoId?: string | null;
-  usuarioId?: string | null;
-  payload: T;
-}
-
-export interface EventoPublicado<T = unknown> extends EventoDominio<T> {
-  id: number;
-  createdAt: Date;
-}
-
-export class EventBus {
-  // Los módulos registran handlers explícitamente (ej. en onModuleInit)
-  alPublicarEnTx(tipo: string, handler: (tx: Tx, evento: EventoPublicado) => Promise<void>): void;
-  despuesDeCommit(tipo: string, handler: (evento: EventoPublicado) => Promise<void>): void;
-
-  // Dentro de la transacción: persiste en evento_sistema y ejecuta handlers transaccionales
-  publicarEnTx<T>(tx: Tx, evento: EventoDominio<T>): Promise<EventoPublicado<T>>;
-}
+    Nginx -->|"Proxy de /api/v1/* incluido /api/v1/stream"| API
+    API -->|"SQL con Drizzle ORM y LISTEN/NOTIFY"| DB
 ```
 
-El dispatcher post-commit corre en el mismo proceso: `LISTEN/NOTIFY` (canal `evento_sistema`) para despertar al instante + sondeo de respaldo cada 5 s sobre `evento_sistema WHERE procesado_at IS NULL … FOR UPDATE SKIP LOCKED`.
+---
 
-### Catálogo de eventos (MVP)
+### 2.3. Nivel 3: Diagrama de Componentes de la API (C4-Component)
+Muestra la organización modular interna de `apps/api/src` y el flujo de comunicación.
 
-| Evento | Publica | Handlers en transacción | Handlers post-commit |
+```mermaid
+flowchart TD
+    Browser["Navegadores (POS, KDS, Admin)"]
+
+    subgraph API["apps/api (NestJS)"]
+        subgraph Seguridad["Seguridad global"]
+            Helmet["Helmet<br>cabeceras HTTP"]
+            Guards["Guards globales en orden:<br>OrigenGuard, ThrottlerGuard, SesionGuard, RolesGuard"]
+        end
+
+        subgraph Modulos["Módulos de negocio (apps/api/src/modules)"]
+            MIdentidad["identidad<br>login, sesiones, guards, @Roles"]
+            MCatalogo["catalogo<br>categorías, productos, recetas, disponibilidad"]
+            MClientes["clientes<br>directorio de clientes"]
+            MPedidos["pedidos<br>pedidos, ítems, mesas, totales"]
+            MCocina["cocina<br>comandas y KDS"]
+            MInventario["inventario<br>stock, kardex, consumo por receta"]
+            MCaja["caja<br>sesiones de caja, cobros, recibos"]
+            MAdmin["administracion<br>KPIs y bitácora, solo lectura"]
+            MRealtime["realtime<br>hub SSE en /api/v1/stream"]
+        end
+
+        subgraph Kernel["shared-kernel"]
+            EventBus["EventBus<br>publicarEnTx, alPublicarEnTx, despuesDeCommit"]
+            Outbox["OutboxDispatcher<br>LISTEN/NOTIFY y sondeo cada 5 s"]
+            DbKernel["Db y pool de PostgreSQL<br>Drizzle"]
+        end
+    end
+
+    subgraph BaseDatos["PostgreSQL"]
+        TablasNegocio[("Tablas de cada módulo")]
+        TablaEventos[("evento_sistema<br>outbox y auditoría")]
+        VistasSQL[("Vistas v_*")]
+    end
+
+    Browser -->|"HTTP /api/v1/*"| Helmet
+    Helmet --> Guards
+    Guards --> Modulos
+
+    MPedidos -->|"PedidosService llama vía *.public.ts con tx"| MInventario
+    MPedidos -->|"crearComanda con tx"| MCocina
+    MPedidos -->|"resuelve productos y recetas"| MCatalogo
+    MPedidos -->|"valida cliente"| MClientes
+    MCaja -->|"prepararCobro y cerrar con tx"| MPedidos
+    MInventario -->|"resolverRecetas"| MCatalogo
+    MCatalogo -->|"lee ingredientes"| MInventario
+
+    MPedidos -->|"publicarEnTx"| EventBus
+    MCocina -->|"publicarEnTx"| EventBus
+    MCaja -->|"publicarEnTx"| EventBus
+    MInventario -->|"publicarEnTx"| EventBus
+    MIdentidad -->|"publicarEnTx"| EventBus
+    EventBus -->|"INSERT y pg_notify dentro de la tx"| TablaEventos
+    TablaEventos -->|"NOTIFY tras el COMMIT"| Outbox
+    Outbox -->|"SELECT FOR UPDATE SKIP LOCKED"| TablaEventos
+    Outbox -->|"handlers despuesDeCommit"| MRealtime
+    Outbox -->|"handlers despuesDeCommit"| MCatalogo
+    MRealtime -->|"Server-Sent Events"| Browser
+
+    MAdmin -->|"consultas de lectura"| VistasSQL
+    Modulos --> DbKernel
+    DbKernel --> TablasNegocio
+```
+
+---
+
+## 3. Módulos y Responsabilidades
+
+| Subsistema | Módulo | Responsabilidad Principal en el MVP | Fachada Pública (`*.public.ts`) |
 |---|---|---|---|
-| `PedidoConfirmado` | pedidos | inventario: consumir según receta · cocina: crear comanda | realtime: notificar KDS · administracion: métricas |
-| `PedidoAnulado` | pedidos | inventario: revertir consumo (si comanda PENDIENTE) o registrar merma · cocina: anular comanda | realtime |
-| `ComandaIniciada` / `ComandaLista` / `ComandaEntregada` | cocina | — | realtime: notificar POS · administracion: tiempos de preparación |
-| `PedidoCobrado` | caja | pedidos: cerrar pedido (y confirmar si estaba ABIERTO) | realtime · administracion: ventas |
-| `StockBajoMinimo` | inventario | — | administracion: alerta · realtime |
-| `IngredienteAgotado` | inventario | — | catalogo: marcar productos agotados (retroalimentación) · realtime |
-| `IngredienteRepuesto` | inventario | — | catalogo: re-evaluar disponibilidad · realtime |
-| `SesionCajaCerrada` | caja | — | administracion: reporte de cierre |
+| **Empleados** | `identidad` | Login con throttling, revocación de sesiones opacas en base de datos, decoradores de autenticación y guards RBAC. | `IdentidadPublic`, `Roles`, `Publico`, `UsuarioActual` |
+| **Productos** | `catalogo` | Menú para POS, categorías, productos, recetas de ingredientes, override de disponibilidad (agotado). | `CatalogoPublicService` |
+| **Clientes** | `clientes` | Búsqueda y registro opcional de clientes asociados al pedido. | `ClientesPublicService` |
+| **Pedidos** | `pedidos` | Creación de tickets para mesa o llevar, control de mesas ocupadas, adición/edición de ítems y confirmación atómica. | `PedidosPublicService` |
+| **Cocina** | `cocina` | Generación de comandas, avance de estados de preparación en KDS y cálculo de tiempos. | `CocinaPublicService` |
+| **Inventario** | `inventario` | Control de stock por unidad base, consumo por recetas con `FOR UPDATE`, entradas, ajustes, mermas y kardex. | `InventarioPublicService` |
+| **Facturación** | `caja` | Apertura/cierre de turnos de caja, cobro atómico, emisión de recibos y registro de pagos. | `CajaPublicService` |
+| **Administración**| `administracion` | Agregación de KPIs para el Dashboard mediante vistas SQL, métricas de ventas y bitácora de auditoría. | `AdministracionPublicService` |
+| **Tiempo Real** | `realtime` | Hub SSE (`/api/v1/stream`), distribución de eventos por canales según rol, gestión de reconexión y replay. | `RealtimeModule`, `RealtimeService` |
 
-## 6. Recorrido del pedido (flujo principal)
+### Reglas de Dependencia y Fronteras
+1. **Importación exclusiva de `*.public.ts`:** Ningún módulo puede importar controladores, servicios internos, esquemas o repositorios de otro módulo. La herramienta `dependency-cruiser` verifica esta regla en cada corrida de CI.
+2. **Propiedad estricta de tablas:** Un módulo solo lee y escribe en sus propias tablas relacionales.
+3. **Comunicación síncrona transaccional:** Cuando una operación requiere atomicidad entre módulos (ej. confirmar pedido y descontar inventario), el servicio emisor invoca al servicio público del otro módulo **pasando la instancia de transacción `tx` activa**.
+4. **Desacoplamiento asíncrono:** Notificaciones, reactividad visual y recálculos secundarios se propagan exclusivamente mediante eventos de dominio procesados por el outbox.
+
+---
+
+## 4. Bus de Eventos y Patrón Outbox (`evento_sistema`)
+
+Para garantizar consistencia y evitar el problema de la doble escritura (*dual write*), el sistema utiliza el patrón **Transactional Outbox**:
+
+```
+Transacción de Negocio (BEGIN)
+  ├── 1. Mutaciones en tablas del módulo (pedido, pedido_item, etc.)
+  ├── 2. Invocaciones a servicios públicos con tx (consumo inventario, comanda)
+  ├── 3. EventBus.publicarEnTx(tx, evento)
+  │      ├── INSERT INTO evento_sistema (tipo, modulo, payload, ...)
+  │      ├── Ejecutar handlers transaccionales (alPublicarEnTx) con tx
+  │      └── SELECT pg_notify('evento_sistema', id)
+  └── COMMIT
+       │
+       ▼ (Postgres despacha NOTIFY al confirmar el COMMIT)
+  OutboxDispatcher (LISTEN evento_sistema)
+  ├── Despierta instantáneamente (o por sondeo cada 5 s de respaldo)
+  ├── SELECT ... FROM evento_sistema WHERE procesado_at IS NULL FOR UPDATE SKIP LOCKED
+  ├── Ejecuta handlers post-commit (despuesDeCommit) -> RealtimeService (SSE)
+  └── UPDATE evento_sistema SET procesado_at = now()
+```
+
+### Catálogo de Eventos del Dominio
+
+| Evento | Módulo Emisor | Tipo de Reacción | Destinatario Principal |
+|---|---|:---:|---|
+| `PedidoConfirmado` | `pedidos` | Post-commit | `realtime` → emite `comanda.nueva` a canales `cocina` y `pos`. |
+| `ComandaIniciada` | `cocina` | Post-commit | `realtime` → emite `comanda.estado` a `cocina` y `pos`. |
+| `ComandaLista` | `cocina` | Post-commit | `realtime` → emite `comanda.estado` a `cocina` y `pos` (notifica pedido listo). |
+| `ComandaEntregada` | `cocina` | Post-commit | `realtime` → emite `comanda.estado` a `cocina` y `pos`. |
+| `PedidoCobrado` | `caja` | Post-commit | `realtime` → emite `pedido.cobrado` a `pos` y `admin` (refresca KPIs y mesas). |
+| `SesionCajaCerrada`| `caja` | Post-commit | Auditoría interna en `evento_sistema`. |
+| `StockBajoMinimo` | `inventario` | Post-commit | `realtime` → emite `inventario.alerta` a canal `admin`. |
+| `IngredienteAgotado`| `inventario` | Post-commit | `catalogo` (marca `agotado = true`) y `realtime` (emite alerta a admin). |
+| `IngredienteRepuesto`| `inventario`| Post-commit | `catalogo` (re-evalúa disponibilidad) y `realtime` (`catalogo.disponibilidad`). |
+
+---
+
+## 5. Diagrama de Secuencia: Flujo de una Venta Completa
+
+Representación exacta de las transacciones, validaciones y eventos durante una venta en el restaurante:
 
 ```mermaid
 sequenceDiagram
-    actor Cajero
-    participant POS as web/POS
-    participant P as pedidos
-    participant I as inventario
-    participant K as cocina
-    participant C as caja
-    participant RT as realtime (SSE)
-    participant KDS as web/Cocina
+    autonumber
+    actor Cajero as Cajero
+    actor Cocinero as Cocinero
+    participant POS as Web POS
+    participant KDS as Web KDS
+    participant Pedidos as PedidosService
+    participant Inv as InventarioService
+    participant Cocina as CocinaService
+    participant Caja as CajaService
+    participant Bus as EventBus y OutboxDispatcher
+    participant RT as RealtimeService (SSE)
 
-    Cajero->>POS: arma ticket y "Enviar a cocina"
-    POS->>P: POST /pedidos/{id}/confirmar
-    activate P
-    P->>P: BEGIN · valida estado ABIERTO
-    P->>I: consumir(items) — SELECT … FOR UPDATE ingredientes
-    I-->>P: ok | 409 stock insuficiente (ROLLBACK)
-    P->>K: crearComanda(pedido)
-    P->>P: estado = CONFIRMADO · evento_sistema · COMMIT
-    deactivate P
-    P--)RT: PedidoConfirmado (post-commit)
-    RT--)KDS: comanda.nueva
-    KDS->>K: POST /comandas/{id}/iniciar … /lista
-    K--)RT: ComandaLista
-    RT--)POS: "Pedido #014 listo"
-    Cajero->>C: POST /caja/cobros (pagos)
-    C->>P: cerrar(pedido) — misma tx
-    C--)RT: PedidoCobrado
+    Note over Cajero,POS: 1. Toma de pedido en mostrador
+    Cajero->>POS: Arma el ticket (ítems, cantidades, mesa)
+    POS->>Pedidos: POST /api/v1/pedidos (crea pedido ABIERTO)
+    POS->>Pedidos: POST /api/v1/pedidos/{id}/items (agrega líneas)
+
+    Note over Pedidos,Inv: 2. Confirmación atómica (llamadas síncronas vía *.public.ts, misma tx)
+    Cajero->>POS: Presiona Enviar a cocina
+    POS->>Pedidos: POST /api/v1/pedidos/{id}/confirmar
+    activate Pedidos
+    Pedidos->>Pedidos: BEGIN (tx)
+    Pedidos->>Inv: consumir(tx, items, usuarioId, pedidoId)
+    activate Inv
+    Inv->>Inv: SELECT FOR UPDATE de ingredientes (orden ascendente de id)
+    alt Stock insuficiente
+        Inv-->>Pedidos: DomainError 409 STOCK_INSUFICIENTE
+        Pedidos-->>POS: ROLLBACK y 409 con faltantes
+    else Stock suficiente
+        Inv->>Inv: INSERT movimiento_inventario (CONSUMO) y actualiza stock
+        Inv->>Bus: publicarEnTx(tx, StockBajoMinimo o IngredienteAgotado) si aplica
+        Inv-->>Pedidos: OK
+    end
+    deactivate Inv
+    Pedidos->>Cocina: crearComanda(tx, datos)
+    activate Cocina
+    Cocina->>Cocina: INSERT comanda (PENDIENTE) y comanda_item
+    Cocina-->>Pedidos: comandaId
+    deactivate Cocina
+    Pedidos->>Pedidos: UPDATE pedido (estado CONFIRMADO)
+    Pedidos->>Bus: publicarEnTx(tx, PedidoConfirmado)
+    Bus->>Bus: INSERT evento_sistema, handlers alPublicarEnTx y pg_notify
+    Pedidos->>Pedidos: COMMIT
+    deactivate Pedidos
+    Pedidos-->>POS: 200 Pedido confirmado
+
+    Note over Bus,KDS: 3. Difusión en tiempo real (post-commit)
+    Bus-)RT: NOTIFY tras el COMMIT, el outbox ejecuta los handlers despuesDeCommit
+    RT-)KDS: SSE comanda.nueva (canales cocina y pos)
+    KDS->>KDS: Invalida la query comandas y muestra la tarjeta
+
+    Note over Cocinero,KDS: 4. Preparación en cocina
+    Cocinero->>KDS: Presiona Iniciar
+    KDS->>Cocina: POST /api/v1/comandas/{id}/iniciar
+    Cocina->>Bus: publicarEnTx(tx, ComandaIniciada) y estado EN_PREPARACION
+    Cocinero->>KDS: Presiona Marcar lista
+    KDS->>Cocina: POST /api/v1/comandas/{id}/lista
+    Cocina->>Bus: publicarEnTx(tx, ComandaLista) y estado LISTA
+    Bus-)RT: Outbox despacha ComandaIniciada y ComandaLista
+    RT-)POS: SSE comanda.estado (el POS avisa que el pedido está listo)
+    RT-)KDS: SSE comanda.estado
+
+    Note over Cajero,Caja: 5. Cobro y cierre de cuenta
+    Cajero->>POS: Abre el diálogo de cobro y registra el pago
+    POS->>Caja: POST /api/v1/caja/cobros
+    activate Caja
+    Caja->>Caja: BEGIN (tx) y valida sesión de caja ABIERTA del cajero
+    Caja->>Pedidos: prepararCobro(tx, pedidoId, usuarioId)
+    Caja->>Caja: Valida un solo pago y que monto = total + propina
+    Caja->>Caja: INSERT recibo y pago
+    Caja->>Pedidos: cerrar(tx, pedidoId) (estado CERRADO)
+    Caja->>Bus: publicarEnTx(tx, PedidoCobrado)
+    Caja->>Caja: COMMIT
+    deactivate Caja
+    Caja-->>POS: 201 reciboId, numero y cambio
+    POS->>POS: Abre la vista de impresión del recibo
+    Bus-)RT: Outbox despacha PedidoCobrado
+    RT-)POS: SSE pedido.cobrado (canales pos y admin)
 ```
 
-> En hamburguesería de mostrador el cobro puede ocurrir **antes** de que cocina termine (pago anticipado). El estado de cocina (comanda) y el de pago (pedido) son independientes; ver [BUSINESS_RULES.md](./docs/BUSINESS_RULES.md).
+---
 
-## 7. Máquinas de estado
+## 6. Seguridad y Protección de la Información
 
-**Pedido** (módulo `pedidos`)
+1. **Sesiones Opacas y Cookies Seguras:**
+   - La autenticación no expone tokens en el cliente ni utiliza JWTs susceptibles de robo por XSS.
+   - Generación de tokens aleatorios de 256 bits (`crypto.randomBytes(32)`).
+   - En la base de datos (`sesion_usuario`) únicamente se almacena el hash SHA-256 en hexadecimal del token.
+   - La cookie de sesión `mb_session` se envía con atributos `HttpOnly`, `SameSite=Strict`, `Path=/`, y `Secure` según `COOKIE_SECURE`.
+   - Expiración deslizante: si transcurren más de 5 minutos de actividad, el backend actualiza la expiración en la base de datos y reemite la cookie.
+2. **Hasheo de Contraseñas:**
+   - Algoritmo **argon2id** con parámetros recomendados de memoria y tiempo (`$argon2id$v=19$m=65536,p=4,t=3$`).
+   - Mitigación de *timing attacks*: en intentos de login con usuarios inexistentes, se ejecuta una verificación con un hash ficticio precalculado para igualar el tiempo de cómputo.
+3. **Protección contra CSRF (Cross-Site Request Forgery):**
+   - Combinación de `SameSite=Strict` en la cookie y validación obligatoria de la cabecera `Origin` en `OrigenGuard` para todos los métodos mutantes (`POST`, `PATCH`, `PUT`, `DELETE`).
+4. **Protección contra Fuerza Bruta (Throttling):**
+   - `@nestjs/throttler` configurado globalmente (600 peticiones/minuto) y con límite estricto de **5 peticiones por minuto por IP** en `POST /api/v1/auth/login`.
+5. **Cabeceras HTTP de Seguridad:**
+   - Integración de **Helmet** en `app.factory.ts` para deshabilitar sniffing MIME, XSS auditor legado y ocultar la firma del framework (`X-Powered-By`).
 
-```
-ABIERTO ──confirmar──► CONFIRMADO ──cobrar──► CERRADO
-   │  └─────────── cobrar (pago anticipado: confirma + cierra) ───────►┘
-   └──anular──► ANULADO ◄──anular── CONFIRMADO   (solo ADMIN, con motivo; nunca desde CERRADO en MVP)
-```
-- En `ABIERTO` se pueden agregar/quitar/editar ítems. En `CONFIRMADO` no (MVP).
+---
 
-**Comanda** (módulo `cocina`)
+## 7. Atributos de Calidad (ISO 25010)
 
-```
-PENDIENTE ──iniciar──► EN_PREPARACION ──marcarLista──► LISTA ──entregar──► ENTREGADA
-     └────────────── anular (por PedidoAnulado) ──────────────► ANULADA
-```
+- **Consistencia y Fiabilidad (AC-1):** Cero transacciones parciales. Descuento de inventario y confirmación de pedidos ocurren bajo la misma transacción ACID de PostgreSQL con bloqueos pesimistas ordenados (`SELECT ... FOR UPDATE`), previniendo condiciones de carrera ante múltiples terminales concurrentes.
+- **Rendimiento y Latencia (AC-2):** El flujo de eventos mediante `LISTEN/NOTIFY` entrega notificaciones a las pantallas KDS en ≤ 2 segundos.
+- **Mantenibilidad (AC-3):** Verificación automatizada de fronteras de módulos mediante `dependency-cruiser`. Cero código muerto, contratos tipados compartidos y reglas de negocio documentadas con código trazable (`RN-xx`).
+- **Seguridad Operativa (AC-4):** Bitácora inmutable de auditoría en `evento_sistema` que registra el usuario responsable, timestamp UTC y payload de toda acción sensible (anulaciones, ajustes de inventario, cierres de caja).
 
-**Sesión de caja** (módulo `caja`): `ABIERTA ──cerrar──► CERRADA`.
+---
 
-Las transiciones se validan en el servicio; la columna `version` (bloqueo optimista) evita que dos terminales cambien el mismo pedido a la vez.
+## 8. Registro de Decisiones de Arquitectura (ADR)
 
-## 8. Tiempo real (SSE)
+Las decisiones estructurales tomadas en el proyecto se encuentran formalizadas de forma independiente en la carpeta [`docs/adr/`](./docs/adr/):
 
-- Endpoint único `GET /api/stream?canales=cocina,pos,admin` (requiere sesión).
-- El hub `realtime` suscribe handlers post-commit y emite mensajes `{ tipo, id, datos, ts }`.
-- El front usa `EventSource` y, al recibir un mensaje, **invalida la query** de TanStack correspondiente (no aplica parches manuales al estado): simple y consistente.
-- Reconexión automática del navegador + `Last-Event-ID` → el servidor reenvía desde `evento_sistema`.
-- Heartbeat cada 25 s para que proxies no cierren la conexión.
-
-## 9. Seguridad
-
-- **Autenticación:** usuario + contraseña → sesión opaca (token aleatorio de 256 bits; en BD solo su hash SHA-256) en cookie `HttpOnly; Secure; SameSite=Strict`. Expiración deslizante 12 h. Logout invalida en BD.
-- **Contraseñas:** argon2id.
-- **Autorización:** guard por rol (`@Roles('ADMIN')`) + reglas en servicio (p. ej. anular requiere ADMIN).
-- **CSRF:** `SameSite=Strict` + verificación de cabecera `Origin` en métodos mutantes.
-- **Rate limit** en `/auth/login` (`@nestjs/throttler`).
-- **Validación** de toda entrada con Zod; respuestas de error con formato único (`{ codigo, mensaje, detalles? }`).
-- **Auditoría:** toda acción sensible (anulación, ajuste de inventario, cierre de caja) queda en `evento_sistema` con `usuario_id`.
-- **Secretos** solo por variables de entorno (`.env` fuera de git; `.env.example` versionado).
-
-Roles del MVP: `ADMIN`, `CAJERO`, `COCINA`. (`MESERO` llega en v1.1 con la vista móvil.)
-
-## 10. Calidad, pruebas y despliegue
-
-| Nivel | Herramienta | Qué cubre |
-|---|---|---|
-| Unitario | Vitest | `@mb/shared/money`, máquinas de estado, reglas de servicio |
-| Integración | Vitest + PostgreSQL dedicado (`DATABASE_URL_TEST`) | Casos de uso con BD real: login/sesiones, confirmar pedido descuenta stock, concurrencia de stock, cierre de caja |
-| Fronteras | dependency-cruiser | Ningún módulo importa internos de otro |
-| E2E | Playwright | "Venta completa": login → ticket → cocina → cobro → recibo |
-
-- **CI (GitHub Actions):** `pnpm install --frozen-lockfile` → lint → typecheck → test → build.
-- **Despliegue MVP:** un PC/mini-servidor en la LAN del restaurante con `docker compose up -d` (postgres + api + nginx/web). HTTPS con Caddy y certificado local.
-- **Respaldo:** `pg_dump` diario por cron a disco externo/nube (script en `ops/backup.sh`).
-- **Entornos:** `development` (local), `production` (restaurante). Variables: `DATABASE_URL`, `SESSION_SECRET`, `TZ=America/Bogota`, `APP_ORIGIN`.
-
-## 11. Decisiones (ADR)
-
-| # | Decisión | Alternativas | Motivo |
-|---|---|---|---|
-| 001 | TypeScript full-stack (NestJS + React) | Java/Spring, Python/FastAPI | Un lenguaje, tipos y esquemas compartidos, un solo toolchain |
-| 002 | PostgreSQL 17 (dev local) / compatible 18 | MySQL, SQLite | Transacciones y bloqueo de filas robustos, `CHECK`/índices parciales para invariantes de negocio, JSONB para eventos, `LISTEN/NOTIFY`, funciones de ventana para reportes. Dev usa PG 17 local con base de test dedicada (`DATABASE_URL_TEST`); producción/CI usan contenedor PostgreSQL. |
-| 003 | Drizzle ORM | Prisma, TypeORM | SQL explícito, `FOR UPDATE`, transacciones interactivas, migraciones SQL legibles |
-| 004 | Monolito modular | Microservicios | Un restaurante, un servidor; fronteras claras sin coste operativo |
-| 005 | Eventos con outbox en Postgres | Redis/RabbitMQ | Cero infraestructura extra; atomicidad con la transacción de negocio |
-| 006 | SSE | WebSocket/Socket.IO | Flujo unidireccional; funciona con cookie; reconexión nativa |
-| 007 | Sesiones en BD | JWT | Revocación inmediata (empleado despedido); sin refresh tokens |
-| 008 | Dinero en enteros (pesos COP) | `numeric` + decimales | COP no usa centavos; aritmética exacta en JS sin librerías |
-| 009 | Cantidades de inventario en enteros de unidad base (g, ml, und) | `numeric(12,3)` | Exactitud sin decimales en JS |
-| 010 | SPA (Vite) | Next.js | Sin SEO/SSR; despliegue estático simple en LAN |
-| 011 | Régimen `NO_RESPONSABLE` (impuesto 0) parametrizable; recibo interno no fiscal; DEE POS DIAN diferido a v2 | Integrar proveedor tecnológico desde el MVP | El MVP es para llevar las cuentas del negocio; `regimen_tributario` permite pasar a INC 8 % / IVA 19 % sin cambiar código; la emisión electrónica se integra antes de operar formalmente |
+- [**ADR-001:** TypeScript Full-Stack (NestJS + React)](./docs/adr/0001-typescript-fullstack.md)
+- [**ADR-002:** PostgreSQL 17 (Dev Local) / Compatible PG 18 como Base de Datos](./docs/adr/0002-postgresql-como-base-de-datos.md)
+- [**ADR-003:** Drizzle ORM como Capa de Acceso a Datos](./docs/adr/0003-drizzle-orm.md)
+- [**ADR-004:** Arquitectura de Monolito Modular](./docs/adr/0004-monolito-modular.md)
+- [**ADR-005:** Eventos de Dominio con Patrón Outbox en PostgreSQL (`evento_sistema`)](./docs/adr/0005-eventos-de-dominio-con-outbox-en-postgresql.md)
+- [**ADR-006:** Server-Sent Events (SSE) para Tiempo Real](./docs/adr/0006-server-sent-events-sse.md)
+- [**ADR-007:** Sesiones Opacas en Base de Datos con Cookies HttpOnly y Hashes Argon2id](./docs/adr/0007-sesiones-opacas-en-base-de-datos-con-cookies-httponly.md)
+- [**ADR-008:** Manejo de Dinero en Enteros (Pesos Colombianos - COP)](./docs/adr/0008-dinero-en-enteros-pesos-cop.md)
+- [**ADR-009:** Cantidades de Inventario en Enteros de Unidad Base (`G`, `ML`, `UND`)](./docs/adr/0009-cantidades-de-inventario-en-enteros-de-unidad-base.md)
+- [**ADR-010:** Frontend SPA con React 19, Vite 8 y React Router](./docs/adr/0010-spa-con-react-19-y-vite-8.md)
+- [**ADR-011:** Régimen NO_RESPONSABLE Parametrizable y Recibo Interno No Fiscal](./docs/adr/0011-regimen-no-responsable-y-recibo-no-fiscal.md)

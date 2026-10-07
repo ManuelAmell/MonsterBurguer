@@ -1,90 +1,143 @@
-# Roadmap del MVP — MonsterBurguer POS
+# Roadmap del Proyecto — MonsterBurguer POS
 
-Cada hito termina con algo **demostrable** y sigue el recorrido del pedido del documento de Enfoque de Sistemas: cada hito agrega una flecha del diagrama.
-
-**Definición de terminado (aplica a cada tarea):** tipado estricto sin errores · lint limpio · tests de la regla de negocio que toca (citando `RN-xx`) · UI revisada con `/ui-ux-pro-max` contra [DESIGN.md](../DESIGN.md) · documentación actualizada si cambió un contrato.
+> **Seguimiento del estado de desarrollo por hito y backlog técnico.**  
+> Refleja el estado real del código implementado en el repositorio (rama `main`), documentando lo completado, lo parcial y los pendientes identificados.
 
 ---
 
-## Hito 0 — Fundaciones
+## 1. Estado Actual de los Hitos del MVP
 
-Demo: `pnpm dev` levanta api + web; login funciona; CI en verde.
+### Hito 0 — Fundaciones Arquitecturales
+**Objetivo:** Monorepo, persistencia, bus de eventos, seguridad base y puesta en marcha.  
+**Estado:** ✅ **Completado**
+- [x] Monorepo con `pnpm workspaces`: `apps/api`, `apps/web`, `packages/shared`; TypeScript estricto, ESLint, Prettier.
+- [x] Contenedor de base de datos `docker-compose.yml` con PostgreSQL y archivo `.env.example`.
+- [x] NestJS base con configuración Zod (`env.ts`), logger estructurado Pino, filtro global de excepciones y endpoint `/api/v1/health`.
+- [x] Drizzle ORM: cliente relacional, helper transaccional y migraciones SQL versionadas (`0000_inicial.sql`).
+- [x] `EventBus` (`apps/api/src/shared-kernel/events`): `publicarEnTx`, `alPublicarEnTx`, `despuesDeCommit` y `OutboxDispatcher` con `LISTEN/NOTIFY` sobre `evento_sistema`.
+- [x] Módulo `identidad`: login con rate limiting (5 req/min), logout, me, guards de sesión y roles, argon2id y seed inicial (`admin`).
+- [x] Paquete `@mb/shared`: utilidades de dinero (`money.ts`), fecha operativa (`fecha-operativa.ts`), enums y esquemas Zod compartidos con 99 tests unitarios.
+- [x] Frontend base: React 19 + Vite 8 + Tailwind v4 + shadcn/ui con tokens de diseño, router por rol y pantalla de login.
+- [x] Base de datos de test (`DATABASE_URL_TEST`) y tests de integración en `apps/api/test/auth.spec.ts`.
+- [x] Fronteras modulares verificadas con `dependency-cruiser` (`pnpm depcruise`).
 
-- [x] Monorepo pnpm: `apps/api`, `apps/web`, `packages/shared`; TS strict, ESLint, Prettier
-- [x] `docker-compose.yml` con PostgreSQL (+ volumen) y `.env.example`
-- [x] NestJS base: config validada con Zod, `nestjs-pino`, filtro de errores con formato único, health check `/api/v1/health`
-- [x] Drizzle: cliente, helper de transacción, migración inicial (`usuario`, `sesion_usuario`, `configuracion`, `evento_sistema`)
-- [x] `shared-kernel/events`: `EventBus` (`alPublicarEnTx`, `despuesDeCommit`), handlers en transacción y post-commit, dispatcher del outbox
-- [x] Módulo `identidad`: login/logout/me, guard de sesión y de roles, throttling, seed `admin`
-- [x] `@mb/shared`: `money.ts` con tests (RN-01..06, incluido el ejemplo de $49.700), `enums.ts`
-- [x] Web: Vite 8 + Tailwind v4 + shadcn/ui con tokens de DESIGN §3 (claro/oscuro), fuentes, router por rol, layout con barra lateral, pantalla de login
-- [x] Base de datos de test (`DATABASE_URL_TEST`) configurada + 10 tests de integración de autenticación (login, me, logout, throttling, roles)
-- [x] dependency-cruiser con reglas de frontera entre módulos
-- [x] GitHub Actions: lint → typecheck → test → build
-- [ ] Ejecutar `/ui-ux-pro-max` con `--persist` para generar `design-system/MASTER.md` (requiere reparar la instalación de la skill, ver DESIGN §9)
+---
 
-## Hito 1 — Catálogo + Inventario
+### Hito 1 — Catálogo e Inventario
+**Objetivo:** Gestión de ingredientes, recetas por producto, stock y kardex auditable.  
+**Estado:** ✅ **Completado (con CRUD de categorías diferido en UI)**
+- [x] Migración de base de datos `0001_hito1_catalogo_inventario.sql` (`categoria`, `producto`, `receta_item`, `ingrediente`, `movimiento_inventario`).
+- [x] API de catálogo: categorías, productos con receta y override de agotado manual (`PUT /productos/:id/agotado`).
+- [x] Endpoint POS de menú: `GET /api/v1/catalogo/menu` con categorías activas y productos con flag `agotado`.
+- [x] API de inventario: ingredientes, entradas (`/inventario/entradas`), ajustes físicos (`/inventario/ajustes`), mermas (`/inventario/mermas`) y kardex paginado (`/ingredientes/:id/movimientos`).
+- [x] Fachada pública `inventario.public.ts` con consumo atómico `consumir(tx, items, ...)` con bloqueo `SELECT ... FOR UPDATE` ordenado por ID (RN-32).
+- [x] Pantallas de administración: `/admin/productos` (edición y recetas) y `/admin/inventario` (control de stock y acciones).
+- [x] Datos semilla completos en `apps/api/src/db/seed.ts` con categorías, ingredientes, hamburguesas, acompañamientos y bebidas.
+- [ ] *Pendiente menor:* Pantalla web dedicada para CRUD de categorías (actualmente gestionadas por API y seed).
 
-Demo: el admin crea el menú con recetas e ingredientes con stock.
+---
 
-- [ ] Migraciones: `categoria`, `producto`, `receta_item`, `ingrediente`, `movimiento_inventario`
-- [ ] API catálogo (categorías, productos, receta, agotado manual) + `GET /catalogo/menu`
-- [ ] API inventario: ingredientes, entradas, ajustes, mermas, kardex (RN-30, RN-34)
-- [ ] `inventario.public.ts`: `consumir(tx, items)`, `revertir(tx, …)`, `registrarMerma(tx, …)` con `FOR UPDATE` ordenado (RN-32)
-- [ ] Admin UI: categorías, productos con editor de receta, inventario con nivel de stock, kardex
-- [ ] Seed de demo (PRD §7)
+### Hito 2 — Pedidos y Terminal POS
+**Objetivo:** Toma de pedidos para mesa o llevar, ticket reactivo, confirmación atómica y reserva de stock.  
+**Estado:** ✅ **Completado (con anulación de pedidos en backlog)**
+- [x] Migración `0002_mesas_clientes.sql` (`mesa`, `cliente`) y `0003_hito2_4_pedidos_cocina_caja.sql` (`pedido`, `pedido_item`, `contador_dia`).
+- [x] API de pedidos: creación (`POST /pedidos`), gestión de ítems (`/pedidos/:id/items`), confirmación (`POST /pedidos/:id/confirmar`) y mesas (`/mesas`).
+- [x] Consecutivo diario por fecha operativa (`numero_dia`, RN-15 y RN-16) con reinicio automático diario.
+- [x] Confirmación atómica: valida estado `ABIERTO` → descuenta inventario → crea comanda en cocina → cambia a `CONFIRMADO` → emite `PedidoConfirmado` al outbox.
+- [x] Terminal POS web (`/pos`): rail de categorías, grilla táctil de productos, buscador con debounce, ticket en curso con stepper de cantidades, selector de mesa/llevar y diálogo de envío.
+- [x] Indicador de mesas ocupadas en tiempo real para evitar asignaciones duplicadas (RN-11).
+- [ ] *Pendiente conocido:* Endpoint y botón de anulación de pedidos (`POST /pedidos/:id/anular`, RN-50).
 
-## Hito 2 — Pedidos (POS)
+---
 
-Demo: el cajero arma un ticket para mesa o para llevar y lo envía a cocina; el stock baja.
+### Hito 3 — Cocina (KDS) en Tiempo Real
+**Objetivo:** Pantalla KDS para personal de cocina, avance de estados y difusión SSE.  
+**Estado:** ✅ **Completado (con reversión rápida en backlog)**
+- [x] Migración de comanda y comanda_item en `0003_hito2_4_pedidos_cocina_caja.sql`.
+- [x] Creación automática de comanda en estado `PENDIENTE` al confirmar pedidos en `pedidos.service.ts`.
+- [x] Máquina de estados de cocina: `PENDIENTE` → `EN_PREPARACION` → `LISTA` → `ENTREGADA`.
+- [x] Módulo `realtime`: endpoint SSE `GET /api/v1/stream` con filtrado por canales (`cocina`, `pos`, `admin`), reconexión con `Last-Event-ID` y búfer en memoria.
+- [x] Pantalla KDS web (`/cocina`): tema oscuro nativo, columnas por estado, tarjetas legibles a distancia con ítems y notas culinarias resaltadas, temporizadores con umbrales de alerta (8 min warning, 12 min grave, RN-23).
+- [x] Reactividad en frontend: hook `useEventStream` que invalida queries de TanStack Query al recibir eventos SSE.
+- [ ] *Pendiente conocido:* Reversión de avance "Deshacer" dentro de los 10 segundos posteriores (RN-22).
 
-- [ ] Migraciones: `mesa`, `cliente`, `pedido`, `pedido_item`, `contador_dia`
-- [ ] API pedidos: crear, ítems, confirmar (RN-10..17), anular (RN-50); índice de mesa ocupada
-- [ ] Al confirmar: `PedidoConfirmado` → handler en transacción de inventario (consumo)
-- [ ] Test de integración de **concurrencia**: dos confirmaciones compiten por el último stock → exactamente una gana
-- [ ] POS UI: rail de categorías, grilla de productos, búsqueda, ticket con stepper/notas, selector mesa/llevar, enviar a cocina, errores de stock legibles
-- [ ] Lista de pedidos activos
+---
 
-## Hito 3 — Cocina (KDS) en tiempo real
+### Hito 4 — Caja, Cobro y Liquidación
+**Objetivo:** Apertura y cierre de sesión de caja, liquidación de cuenta, emisión de recibo y balance.  
+**Estado:** ✅ **Completado (con pagos mixtos y movimientos manuales en backlog)**
+- [x] Migración de `sesion_caja`, `recibo` (con secuencia global `recibo_numero_seq`) y `pago`.
+- [x] Control de sesiones: apertura con monto base (`POST /caja/sesiones`), verificación de sesión única activa (RN-40) y cierre con arqueo (`POST /caja/sesiones/:id/cerrar`).
+- [x] Cobro de pedidos: `POST /caja/cobros`. Si el pedido está en `ABIERTO`, lo confirma y cierra de forma atómica (RN-44); si está `CONFIRMADO`, valida y cierra.
+- [x] Soporte de propina voluntaria en pedidos de mesa (RN-06), cálculo de cambio en efectivo y emisión de `recibo`.
+- [x] Interfaz de cobro (`CobroDialog` en POS) con teclado numérico táctil (`NumericKeypad`), opciones de propina y cálculo de vueltas.
+- [x] Recibo imprimible en formato térmico de 80 mm (`@media print`) con leyendas "Documento no fiscal" y "No responsable de INC" (RN-45).
+- [x] Pantalla de caja (`/caja`): resumen del turno, ventas acumuladas en efectivo y diálogo de cierre con cálculo de sobrante/faltante.
+- [ ] *Pendiente conocido:* Pagos mixtos (actualmente el cobro exige exactamente 1 método de pago en `caja.service.ts`).
+- [ ] *Pendiente conocido:* Movimientos manuales de caja (`INGRESO` / `RETIRO`, RN-46).
 
-Demo: un pedido confirmado aparece en ≤ 2 s en la pantalla de cocina; al marcarlo listo el POS avisa.
+---
 
-- [ ] Migraciones: `comanda`, `comanda_item`
-- [ ] Handler en transacción: `PedidoConfirmado` → crear comanda (RN-20); `PedidoAnulado` → anular + reversión/merma (RN-35)
-- [ ] API comandas: iniciar, lista, entregar, deshacer (RN-21..23)
-- [ ] Módulo `realtime`: SSE con canales por rol, heartbeat, `Last-Event-ID`
-- [ ] Web: hook `useEventStream` que invalida queries; indicador "Reconectando…"
-- [ ] KDS UI (tema oscuro, pantalla completa): columnas, temporizadores con umbrales, botón de avance, deshacer
-- [ ] Toast en POS "Pedido #NNN listo"
+### Hito 5 — Administración y Retroalimentación
+**Objetivo:** Dashboard gerencial, vistas SQL de reportes y retroalimentación reactiva de stock.  
+**Estado:** 🟡 **Parcialmente Completado**
+- [x] Vistas SQL en base de datos: `v_ventas_dia`, `v_ventas_producto`, `v_ventas_hora`, `v_tiempos_cocina`, `v_stock_alertas`, `v_productos_agotados`.
+- [x] Endpoint `GET /api/v1/admin/dashboard` que agrega KPIs, ventas por hora, top productos, desempeño de cocina y alertas.
+- [x] Endpoint `GET /api/v1/admin/eventos` para auditar la bitácora de eventos del sistema (`evento_sistema`).
+- [x] Retroalimentación automática de stock: al agotarse un ingrediente, los productos que lo requieren se marcan `agotado = true` en base de datos y se notifica vía SSE al POS (RN-36).
+- [x] Pantalla `/admin`: tarjetas de KPIs principales (ventas, pedidos, ticket promedio, tiempos KDS) y estado del inventario.
+- [ ] *Pendiente:* Pantalla de reportes analíticos con filtro por rango de fechas y exportación (CSV/PDF).
+- [ ] *Pendiente:* Interfaz web para visualizar la bitácora de eventos de `evento_sistema`.
+- [ ] *Pendiente:* Interfaz web para editar parámetros de configuración (`/admin/configuracion`).
 
-## Hito 4 — Caja y cobro
+---
 
-Demo: turno completo: abrir caja, cobrar con pago mixto, imprimir recibo, cerrar caja con diferencia.
+### Hito 6 — Endurecimiento y Preparación para Piloto
+**Objetivo:** Pruebas E2E, imagen de despliegue en LAN, backups y estabilidad general.  
+**Estado:** 🟡 **En Progreso**
+- [x] Dockerfile multicapa para API (`apps/api/Dockerfile`) y Nginx/Frontend (`apps/web/Dockerfile`).
+- [x] Orquestación local con `docker-compose.yml` (Postgres, API, Nginx).
+- [x] Scripts de migraciones y carga de datos semilla listos para puesta en marcha.
+- [ ] *Pendiente:* Suite de pruebas E2E con Playwright ("Venta completa": login → ticket → KDS → cobro → recibo).
+- [ ] *Pendiente:* Script de backup programado (`ops/backup.sh`) con `pg_dump` y prueba de restauración.
+- [ ] *Pendiente:* Auditoría formal de accesibilidad y trampa de foco en modales.
 
-- [ ] Migraciones: `sesion_caja`, `movimiento_caja`, `recibo` (+ secuencia), `pago`
-- [ ] API caja: abrir, movimientos, cobrar (RN-40..45, idempotente), cerrar (RN-47..48)
-- [ ] Cobro de pedido `ABIERTO` = confirmar + cerrar en una transacción (RN-44)
-- [ ] UI: abrir caja con teclado numérico, diálogo de cobro (métodos, recibido, cambio, propina), cierre con sobrante/faltante
-- [ ] Recibo imprimible 80 mm (`@media print`) con leyenda "Documento no fiscal"
+---
 
-## Hito 5 — Administración y retroalimentación
+## 2. Backlog Técnico y Funcional Conocido
 
-Demo: el dashboard muestra ventas en vivo; al agotarse un ingrediente, sus productos se desactivan solos en el POS y aparece la alerta.
+Lista de ítems técnicos y funcionales identificados que deben abordarse en las siguientes iteraciones:
 
-- [ ] Reglas post-commit: `StockBajoMinimo`, `IngredienteAgotado`/`Repuesto` → re-evaluar `producto.agotado` (RN-36)
-- [ ] Vistas SQL de reportes (DATA_MODEL "Vistas")
-- [ ] API: dashboard, alertas, reporte de ventas, bitácora de eventos, configuración
-- [ ] UI: KPIs, ventas por hora, top 5, tiempos de cocina, alertas con acción, reportes por rango, bitácora de interacciones, configuración, usuarios
-- [ ] Gráficos con leyenda, tooltip, tabla alternativa y estado vacío (DESIGN §7.6)
+1. **Anulación de Pedidos (`POST /pedidos/:id/anular` — RN-50 y RN-35):**
+   - Exponer endpoint en `pedidos.controller.ts` restringido a rol `ADMIN` con motivo de al menos 5 caracteres.
+   - Conectar con `cocina.public.ts` para marcar la comanda `ANULADA` y con `inventario.public.ts` para emitir `REVERSION` (si la comanda estaba `PENDIENTE`) o `MERMA` (si ya estaba en cocina).
+   - Agregar botón de anulación en el ticket del POS y en la lista de pedidos de administración.
 
-## Hito 6 — Endurecimiento y piloto
+2. **Pagos Mixtos en Cobro (RN-42 y RN-43):**
+   - Modificar la restricción `if (input.pagos.length !== 1)` en `caja.service.ts` para aceptar múltiples métodos de pago (ej. $30.000 Efectivo + $19.700 Tarjeta).
+   - Validar que la suma de los montos coincida exactamente con `total + propina` y que solo exista un pago en efectivo.
+   - Habilitar en `CobroDialog` la adición de múltiples líneas de pago dinámicas.
 
-Demo: un turno de prueba completo con datos semilla, sin errores críticos.
+3. **Movimientos Manuales de Caja (RN-46):**
+   - Crear tabla `movimiento_caja` (`id`, `sesion_caja_id`, `tipo IN ('INGRESO', 'RETIRO')`, `monto`, `motivo`, `usuario_id`, `created_at`).
+   - Implementar endpoints `POST /caja/sesiones/:id/movimientos`.
+   - Incluir los ingresos y retiros en el cálculo del `efectivo_esperado` al cerrar caja (`montoApertura + ventasEfectivo + ingresos - retiros`).
 
-- [ ] E2E Playwright: "venta completa" (login → ticket → KDS → cobro → recibo → cierre de caja) y "agotado automático"
-- [ ] Revisión de seguridad (`/security-review`) y de accesibilidad (checklist de `/ui-ux-pro-max`)
-- [ ] Prueba de carga ligera (10 usuarios concurrentes, p95 < 200 ms)
-- [ ] Imagen de producción: `docker compose` con api + nginx/web + postgres, HTTPS con Caddy
-- [ ] `ops/backup.sh` (`pg_dump` diario) + prueba de restauración
-- [ ] Manual corto de usuario por rol (`docs/MANUAL.md`)
-- [ ] Turno piloto y lista de ajustes → backlog v1.1 (PRD §4)
+4. **Gestión Administrativa de Categorías y Usuarios en Frontend:**
+   - Crear pantalla en `/admin/categorias` para reordenar, activar/desactivar y crear categorías sin depender de llamadas directas a la API.
+   - Diseñar módulo `/admin/usuarios` para crear cajeros y cocineros, cambiar contraseñas y desactivar cuentas (HU-02).
+
+5. **Paginación Robusta de Ingredientes (> 100 ítems):**
+   - En `inventario.repository.ts`, la consulta ordena por `nombre` (`ORDER BY ingrediente.nombre ASC`), pero la condición de cursor evalúa `lt(ingrediente.id, cursor)`.
+   - Ajustar el cursor a un cursor compuesto `(nombre, id)` o paginación por offset/keyset coherente con el ordenamiento alfabético.
+
+6. **Accesibilidad y Trampa de Foco en Diálogos Modales:**
+   - Asegurar que al abrir diálogos (`CobroDialog`, diálogos de confirmación y `NumericKeypad`), el foco del teclado quede atrapado dentro del modal (`focus-trap`) y regrese al elemento disparador al cerrarse con `Escape`.
+
+7. **Reportes Analíticos y Filtro por Fechas:**
+   - Exponer endpoint `GET /api/v1/admin/reportes/ventas` con parámetros de rango (`desde`, `hasta`) y agrupación (`dia`, `producto`, `categoria`).
+   - Crear vista en frontend con tablas y gráficos de Recharts.
+
+8. **Documento Equivalente Electrónico POS (DEE POS DIAN — v2.0):**
+   - Integración con Proveedor Tecnológico autorizado por la DIAN para generar código CUDE, firma digital y código QR en el recibo.
+   - Soporte de Factura Electrónica de Venta para clientes que la soliciten expresamente.
