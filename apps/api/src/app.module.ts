@@ -9,6 +9,7 @@ import { OrigenGuard, RolesGuard, SesionGuard } from './modules/identidad/auth.g
 import { IdentidadModule } from './modules/identidad/identidad.module';
 import { CatalogoModule } from './modules/catalogo/catalogo.module';
 import { InventarioModule } from './modules/inventario/inventario.module';
+import { RealtimeModule } from './modules/realtime/realtime.public';
 import { DbModule } from './shared-kernel/db/db.module';
 import { EventsModule } from './shared-kernel/events/events.module';
 
@@ -35,6 +36,7 @@ export class AppModule {
         IdentidadModule,
         CatalogoModule,
         InventarioModule,
+        RealtimeModule,
       ],
       controllers: [HealthController],
       // Orden de evaluación: origen (CSRF) → límite de peticiones → sesión → rol.
