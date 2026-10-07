@@ -12,6 +12,9 @@ import { InventarioModule } from './modules/inventario/inventario.module';
 import { RealtimeModule } from './modules/realtime/realtime.public';
 import { ClientesModule } from './modules/clientes/clientes.module';
 import { PedidosModule } from './modules/pedidos/pedidos.module';
+import { CajaModule } from './modules/caja/caja.module';
+import { CocinaModule } from './modules/cocina/cocina.module';
+import { AdministracionModule } from './modules/administracion/administracion.module';
 import { DbModule } from './shared-kernel/db/db.module';
 import { EventsModule } from './shared-kernel/events/events.module';
 
@@ -41,6 +44,9 @@ export class AppModule {
         RealtimeModule,
         ClientesModule,
         PedidosModule,
+        CocinaModule,
+        CajaModule,
+        AdministracionModule,
       ],
       controllers: [HealthController],
       // Orden de evaluación: origen (CSRF) → límite de peticiones → sesión → rol.

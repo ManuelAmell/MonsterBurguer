@@ -15,7 +15,7 @@ export function opcionesCookie(env: Env, maxAgeMs: number) {
   return {
     httpOnly: true,
     sameSite: 'strict' as const,
-    secure: env.NODE_ENV === 'production',
+    secure: env.COOKIE_SECURE,
     path: '/',
     maxAge: maxAgeMs,
   };

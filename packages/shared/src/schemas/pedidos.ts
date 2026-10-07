@@ -214,7 +214,8 @@ export const confirmarPedidoSchema = z.object({
   version: z
     .number()
     .int('La versión debe ser un número entero')
-    .min(0, 'La versión debe ser mayor o igual a 0'),
+    .min(0, 'La versión debe ser mayor o igual a 0')
+    .optional(),
 });
 export type ConfirmarPedidoInput = z.input<typeof confirmarPedidoSchema>;
 export type ConfirmarPedidoOutput = z.infer<typeof confirmarPedidoSchema>;

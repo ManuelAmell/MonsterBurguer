@@ -524,6 +524,48 @@ export class InventarioService {
     }
   }
 
+  /**
+   * RN-35: anulación con la comanda ya iniciada. El consumo (CONSUMO) ya descontó el stock y NO vuelve,
+   * así que no se descuenta de nuevo: el consumo se reclasifica como pérdida con un par REVERSION (+)
+   * y MERMA (−) de efecto neto cero en `stock_actual`, que deja la pérdida trazada en el kardex.
+   */
+  async reclasificarConsumoComoMerma(
+    tx: Tx,
+    items: ItemConsumoOReversion[],
+    usuarioId: string,
+    motivo: string,
+    referenciaId?: string,
+  ): Promise<void> {
+    const cantidades = await this.agruparRequerimientos(tx, items);
+    if (cantidades.size === 0) return;
+
+    const idsOrdenados = Array.from(cantidades.keys()).sort();
+    const ingredientes = await this.repo.bloquearIngredientesParaActualizar(idsOrdenados, tx);
+    const mapa = new Map(ingredientes.map((i) => [i.id, i]));
+
+    for (const [id, cantidad] of cantidades.entries()) {
+      const ing = mapa.get(id);
+      if (!ing) continue;
+      const stock = Number(ing.stockActual);
+      for (const [tipo, signo] of [['REVERSION', 1], ['MERMA', -1]] as const) {
+        await this.repo.insertarMovimiento(
+          {
+            id: nuevoId(),
+            ingredienteId: id,
+            tipo,
+            cantidad: signo * cantidad,
+            stockResultante: stock,
+            referenciaTipo: 'PEDIDO',
+            referenciaId: referenciaId ?? null,
+            usuarioId,
+            motivo,
+          },
+          tx,
+        );
+      }
+    }
+  }
+
   // --- Auxiliares privados ---
 
   private async agruparRequerimientos(
