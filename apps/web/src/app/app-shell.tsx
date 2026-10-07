@@ -1,4 +1,4 @@
-import { ChefHat, LayoutDashboard, LogOut, ShoppingCart, Wallet, type LucideIcon } from 'lucide-react';
+import { Boxes, ChefHat, LayoutDashboard, Package, LogOut, ShoppingCart, Wallet, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import type { Rol } from '@mb/shared';
@@ -13,6 +13,7 @@ interface ItemNav {
   label: string;
   icon: LucideIcon;
   roles: Rol[];
+  end?: boolean;
 }
 
 // Matriz de permisos RN-51: cada rol solo ve lo que puede usar.
@@ -20,7 +21,9 @@ export const NAV: ItemNav[] = [
   { to: '/pos', label: t.nav.pos, icon: ShoppingCart, roles: ['ADMIN', 'CAJERO'] },
   { to: '/caja', label: t.nav.caja, icon: Wallet, roles: ['ADMIN', 'CAJERO'] },
   { to: '/cocina', label: t.nav.cocina, icon: ChefHat, roles: ['ADMIN', 'COCINA'] },
-  { to: '/admin', label: t.nav.admin, icon: LayoutDashboard, roles: ['ADMIN'] },
+  { to: '/admin', label: t.admin.nav.dashboard, icon: LayoutDashboard, roles: ['ADMIN'], end: true },
+  { to: '/admin/productos', label: t.admin.nav.productos, icon: Package, roles: ['ADMIN'] },
+  { to: '/admin/inventario', label: t.admin.nav.inventario, icon: Boxes, roles: ['ADMIN'] },
 ];
 
 /** Layout con barra lateral (≥ 1024 px) o barra superior (< 1024 px). DESIGN.md §6. */
@@ -53,10 +56,11 @@ export function AppShell() {
         </div>
         <nav aria-label={t.nav.principal} className="flex-1 overflow-x-auto px-3 pb-3 lg:overflow-visible">
           <ul className="flex gap-2 lg:flex-col">
-            {items.map(({ to, label, icon: Icon }) => (
+            {items.map(({ to, label, icon: Icon, end }) => (
               <li key={to}>
                 <NavLink
                   to={to}
+                  end={end}
                   className={({ isActive }) =>
                     cn(
                       'flex h-12 items-center gap-3 rounded-md px-4 font-medium whitespace-nowrap transition-colors duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring',

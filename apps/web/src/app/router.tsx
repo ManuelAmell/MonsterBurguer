@@ -1,7 +1,8 @@
-import { LayoutDashboard, SearchX, ShoppingCart, Wallet } from 'lucide-react';
+import { SearchX, ShoppingCart, Wallet } from 'lucide-react';
 import { createBrowserRouter, Link } from 'react-router';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
+import { rutaAdmin } from '@/features/admin/routes';
 import { RedirigirPorRol, RequiereRol, RequiereSesion } from '@/features/auth/guards';
 import { LoginPage } from '@/features/auth/login-page';
 import { CocinaPage } from '@/features/cocina/cocina-page';
@@ -60,14 +61,7 @@ export const router = createBrowserRouter([
               </RequiereRol>
             ),
           },
-          {
-            path: 'admin',
-            element: (
-              <RequiereRol roles={['ADMIN']}>
-                <PantallaPendiente titulo={t.nav.admin} icon={LayoutDashboard} hito={1} />
-              </RequiereRol>
-            ),
-          },
+          rutaAdmin,
         ],
       },
     ],
