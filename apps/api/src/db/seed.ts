@@ -9,6 +9,7 @@ import { nuevoId } from '../shared-kernel/ids';
 import { usuario } from '../modules/identidad/identidad.schema';
 import { categoria, producto, recetaItem } from '../modules/catalogo/catalogo.schema';
 import { ingrediente, movimientoInventario } from '../modules/inventario/inventario.schema';
+import { mesa } from '../modules/pedidos/pedidos.schema';
 
 const USUARIOS_DEMO: { nombre: string; username: string; password: string; rol: Rol }[] = [
   { nombre: 'Administrador', username: 'admin', password: 'admin123', rol: 'ADMIN' },
@@ -241,6 +242,12 @@ const PRODUCTOS_DEMO: Array<{
     receta: [{ ingrediente: 'Salsa BBQ Artesanal', cantidad: 50 }],
   },
 ];
+const MESAS_DEMO = Array.from({ length: 8 }, (_, i) => ({
+  nombre: `Mesa ${i + 1}`,
+  capacidad: 4,
+  activa: true,
+  orden: i + 1,
+}));
 
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
@@ -276,7 +283,20 @@ async function main(): Promise<void> {
       }
     }
 
-    // 2. Configuración inicial
+    // 2. Mesas (RN-11) y configuración inicial
+    for (const m of MESAS_DEMO) {
+      await db
+        .insert(mesa)
+        .values({
+          id: nuevoId(),
+          nombre: m.nombre,
+          capacidad: m.capacidad,
+          activa: m.activa,
+          orden: m.orden,
+        })
+        .onConflictDoNothing({ target: mesa.nombre });
+    }
+
     await db
       .insert(configuracion)
       .values(Object.entries(CONFIGURACION_INICIAL).map(([clave, valor]) => ({ clave, valor })))
@@ -385,7 +405,7 @@ async function main(): Promise<void> {
     }
 
     console.info(
-      `Seed listo: 3 usuarios, ${mapaCategorias.size} categorías, ${mapaIngredientes.size} ingredientes, ${PRODUCTOS_DEMO.length} productos con receta.`,
+      `Seed listo: ${USUARIOS_DEMO.length} usuarios, ${MESAS_DEMO.length} mesas, ${mapaCategorias.size} categorías, ${mapaIngredientes.size} ingredientes, ${PRODUCTOS_DEMO.length} productos con receta.`,
     );
   } finally {
     await pool.end();

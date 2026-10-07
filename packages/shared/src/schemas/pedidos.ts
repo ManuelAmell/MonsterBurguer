@@ -76,6 +76,23 @@ export const editarMesaSchema = z.object({
 export type EditarMesaInput = z.input<typeof editarMesaSchema>;
 export type EditarMesaOutput = z.infer<typeof editarMesaSchema>;
 
+export const reordenarMesasSchema = z.object({
+  mesas: z
+    .array(
+      z.object({
+        id: uuidSchema,
+        orden: z
+          .number()
+          .int('El orden debe ser un número entero')
+          .min(0, 'El orden no puede ser negativo'),
+      }),
+    )
+    .min(1, 'Debe incluir al menos una mesa para ordenar'),
+});
+export type ReordenarMesasInput = z.input<typeof reordenarMesasSchema>;
+export type ReordenarMesasOutput = z.infer<typeof reordenarMesasSchema>;
+
+
 // --- Crear Pedido (RN-11) ---
 
 export const crearPedidoSchema = z
