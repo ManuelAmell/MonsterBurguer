@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   abrirSesionCajaSchema,
+  buscarSesionesQuerySchema,
   cerrarSesionCajaSchema,
   cobroRespuestaSchema,
   cobroSchema,
   movimientoCajaInputSchema,
   pagoCobroItemSchema,
   resumenCierreSchema,
+  sesionCajaDetalleSchema,
+  sesionesPaginadasRespuestaSchema,
 } from './caja';
 
 const ID_PEDIDO = '0199b2c4-1111-7000-8000-000000000001';
@@ -75,6 +78,26 @@ describe('schemas/caja', () => {
           motivo: '   ',
         }),
       ).toThrow('El motivo del movimiento es obligatorio');
+    });
+
+    it('RN-46: rechaza movimiento con motivo de menos de 3 caracteres', () => {
+      expect(() =>
+        movimientoCajaInputSchema.parse({
+          tipo: 'INGRESO',
+          monto: 10000,
+          motivo: 'ab',
+        }),
+      ).toThrow(/entre 3 y 140 caracteres/);
+    });
+
+    it('RN-46: rechaza movimiento con motivo de más de 140 caracteres', () => {
+      expect(() =>
+        movimientoCajaInputSchema.parse({
+          tipo: 'RETIRO',
+          monto: 10000,
+          motivo: 'a'.repeat(141),
+        }),
+      ).toThrow(/140 caracteres/);
     });
   });
 
@@ -236,4 +259,87 @@ describe('schemas/caja', () => {
       expect(resumen.diferencia).toBe(-2000);
     });
   });
+
+  describe('buscarSesionesQuerySchema & sesionCajaDetalleSchema', () => {
+    it('acepta query vacía con valores por defecto', () => {
+      const q = buscarSesionesQuerySchema.parse({});
+      expect(q.limit).toBe(50);
+      expect(q.desde).toBeUndefined();
+      expect(q.hasta).toBeUndefined();
+    });
+
+    it('acepta rango de fechas operativas válido (desde <= hasta)', () => {
+      const q = buscarSesionesQuerySchema.parse({
+        desde: '2026-10-01',
+        hasta: '2026-10-07',
+        limit: 20,
+      });
+      expect(q.desde).toBe('2026-10-01');
+      expect(q.hasta).toBe('2026-10-07');
+    });
+
+    it('rechaza rango donde desde > hasta', () => {
+      expect(() =>
+        buscarSesionesQuerySchema.parse({
+          desde: '2026-10-10',
+          hasta: '2026-10-05',
+        }),
+      ).toThrow(/posterior a/);
+    });
+
+    it('valida detalle de sesión de caja', () => {
+      const detalle = sesionCajaDetalleSchema.parse({
+        id: ID_SESION,
+        usuarioId: '0199b2c4-4444-7000-8000-000000000004',
+        cajero: {
+          id: '0199b2c4-4444-7000-8000-000000000004',
+          nombre: 'Cajero Principal',
+        },
+        estado: 'CERRADA',
+        montoApertura: 50000,
+        efectivoEsperado: 120000,
+        efectivoContado: 120000,
+        diferencia: 0,
+        abiertaAt: '2026-10-07T10:00:00.000Z',
+        cerradaAt: '2026-10-07T18:00:00.000Z',
+        version: 1,
+        totalesPorMetodo: {
+          efectivo: 70000,
+          tarjeta: 35000,
+          transferencia: 15000,
+        },
+        totalesMovimientos: {
+          ingresos: 10000,
+          retiros: 10000,
+        },
+        movimientos: [],
+      });
+      expect(detalle.totalesPorMetodo.efectivo).toBe(70000);
+      expect(detalle.diferencia).toBe(0);
+    });
+
+    it('valida respuesta paginada de sesiones', () => {
+      const paginada = sesionesPaginadasRespuestaSchema.parse({
+        items: [
+          {
+            id: ID_SESION,
+            usuarioId: '0199b2c4-4444-7000-8000-000000000004',
+            cajero: {
+              id: '0199b2c4-4444-7000-8000-000000000004',
+              nombre: 'Cajero Principal',
+            },
+            estado: 'ABIERTA',
+            montoApertura: 50000,
+            abiertaAt: '2026-10-07T10:00:00.000Z',
+            version: 0,
+          },
+        ],
+        nextCursor: null,
+      });
+      expect(paginada.items).toHaveLength(1);
+      expect(paginada.nextCursor).toBeNull();
+    });
+  });
 });
+
+

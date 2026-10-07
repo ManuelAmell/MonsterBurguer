@@ -1,11 +1,15 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   sesionCajaSchema,
   type AbrirSesionCajaInput,
   type CobroInput,
   type CobroRespuesta,
+  type MovimientoCaja,
+  type MovimientoCajaInput,
   type ResumenCierre,
   type SesionCaja,
+  type SesionCajaDetalle,
+  type SesionesPaginadasRespuesta,
 } from '@mb/shared';
 import { z } from 'zod';
 import { api } from '@/lib/api';
@@ -37,7 +41,7 @@ function normalizarSesion(raw: unknown): SesionActual | null {
   const registro = raw as Record<string, unknown>;
   const sesion = sesionCajaSchema.safeParse(registro.sesion ?? raw);
   if (!sesion.success) return null;
-  const resumen = resumenSesionSchema.safeParse(registro.resumen);
+  const resumen = resumenSesionSchema.safeParse(registro.resumen ?? registro);
   return { sesion: sesion.data, resumen: resumen.success ? resumen.data : null };
 }
 
@@ -148,3 +152,58 @@ export function useRecibo(reciboId: string | null) {
     retry: 0,
   });
 }
+
+export function useMovimientos(sesionId?: string) {
+  return useQuery({
+    queryKey: ['caja', 'sesiones', sesionId, 'movimientos'],
+    queryFn: () => api<MovimientoCaja[]>(`/caja/sesiones/${sesionId}/movimientos`),
+    enabled: Boolean(sesionId),
+  });
+}
+
+export function useRegistrarMovimiento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      sesionId,
+      datos,
+      clave,
+    }: {
+      sesionId: string;
+      datos: MovimientoCajaInput;
+      clave?: string;
+    }) =>
+      api<MovimientoCaja>(`/caja/sesiones/${sesionId}/movimientos`, {
+        method: 'POST',
+        body: datos,
+        headers: clave ? { 'Idempotency-Key': clave } : undefined,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['caja'] });
+    },
+  });
+}
+
+export function useSesiones(filtros: { desde?: string; hasta?: string }) {
+  return useInfiniteQuery({
+    queryKey: ['caja', 'sesiones', 'historial', filtros],
+    initialPageParam: '',
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: '20' });
+      if (filtros.desde) params.set('desde', filtros.desde);
+      if (filtros.hasta) params.set('hasta', filtros.hasta);
+      if (pageParam) params.set('cursor', pageParam);
+      return api<SesionesPaginadasRespuesta>(`/caja/sesiones?${params.toString()}`);
+    },
+    getNextPageParam: (ultima) => ultima.nextCursor ?? undefined,
+  });
+}
+
+export function useSesionDetalle(sesionId: string | null) {
+  return useQuery({
+    queryKey: ['caja', 'sesiones', sesionId, 'detalle'],
+    queryFn: () => api<SesionCajaDetalle>(`/caja/sesiones/${sesionId}`),
+    enabled: Boolean(sesionId),
+  });
+}
+

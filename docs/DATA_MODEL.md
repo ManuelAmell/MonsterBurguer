@@ -41,11 +41,11 @@ erDiagram
     comanda ||--|{ comanda_item : "desglosa"
 
     sesion_caja ||--o{ recibo : "agrupa"
+    sesion_caja ||--o{ movimiento_caja : "registra"
     pedido ||--o| recibo : "genera (1:1)"
     recibo ||--|{ pago : "se liquida con"
 ```
 
-*Nota sobre el alcance del MVP:* La tabla de movimientos manuales de caja (`movimiento_caja`) no está creada en las migraciones de base de datos del MVP; los balances de caja actuales computan `montoApertura + ventasEfectivo` (ver ADR-011 y ROADMAP).
 
 ---
 
@@ -313,7 +313,7 @@ Apertura, balance y arqueo de caja por cajero (RN-40, RN-47).
 | `usuario_id` | `uuid` | `NOT NULL, FK -> usuario(id)` | Cajero responsable del turno. |
 | `estado` | `text` | `NOT NULL DEFAULT 'ABIERTA'` | `CHECK (estado IN ('ABIERTA', 'CERRADA'))`. |
 | `monto_apertura`| `bigint` | `NOT NULL, CHECK (monto_apertura >= 0)` | Base inicial en efectivo al abrir turno (RN-41). |
-| `efectivo_esperado`| `bigint` | `NULL` | Calculado al cierre: `montoApertura + ventasEfectivo` (RN-47). |
+| `efectivo_esperado`| `bigint` | `NULL` | Calculado al cierre: `montoApertura + ventasEfectivo + ingresos - retiros` (RN-47). |
 | `efectivo_contado`| `bigint` | `NULL` | Dinero físico contado por el cajero al cerrar. |
 | `diferencia` | `bigint` | `NULL` | `efectivoContado - efectivoEsperado` (sobrante + / faltante -). |
 | `abierta_at` | `timestamptz` | `NOT NULL DEFAULT now()` | Momento de apertura. |
@@ -321,6 +321,21 @@ Apertura, balance y arqueo de caja por cajero (RN-40, RN-47).
 | `version` | `integer` | `NOT NULL DEFAULT 0` | Control de concurrencia optimista. |
 
 *Índice clave:* `sesion_caja_abierta_usuario_uq UNIQUE (usuario_id) WHERE estado = 'ABIERTA'` (garantiza máximo una sesión abierta simultánea por cajero, RN-40).
+
+#### Tabla `movimiento_caja`
+Ingresos y retiros manuales de efectivo dentro de una sesión (RN-46). Migración `0004_movimientos_caja.sql`.
+
+| Columna | Tipo PostgreSQL | Restricciones | Descripción |
+|---|---|---|---|
+| `id` | `uuid` | `PRIMARY KEY` | UUID v7. |
+| `sesion_caja_id` | `uuid` | `NOT NULL, FK -> sesion_caja(id) ON DELETE RESTRICT` | Sesión a la que pertenece. |
+| `tipo` | `text` | `NOT NULL, CHECK (tipo IN ('INGRESO', 'RETIRO'))` | Dirección del movimiento. |
+| `monto` | `bigint` | `NOT NULL, CHECK (monto > 0)` | Pesos COP enteros. |
+| `motivo` | `text` | `NOT NULL, CHECK (length(motivo) BETWEEN 3 AND 140)` | Justificación obligatoria. |
+| `usuario_id` | `uuid` | `NOT NULL, FK -> usuario(id)` | Quien registró el movimiento. |
+| `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | Momento del registro. |
+
+*Índices:* `movimiento_caja_sesion_idx (sesion_caja_id)`, `movimiento_caja_created_idx (created_at)`.
 
 #### Tabla `recibo`
 Comprobante interno de cobro POS (RN-45).

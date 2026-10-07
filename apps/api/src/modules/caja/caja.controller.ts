@@ -1,15 +1,22 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import {
   abrirSesionCajaSchema,
+  buscarSesionesQuerySchema,
   cerrarSesionCajaSchema,
   cobroSchema,
+  movimientoCajaInputSchema,
   uuidSchema,
   type AbrirSesionCajaOutput,
+  type BuscarSesionesQuery,
   type CerrarSesionCajaOutput,
   type CobroInput,
   type CobroRespuesta,
+  type MovimientoCaja,
+  type MovimientoCajaInput,
   type ResumenCierre,
   type SesionCaja,
+  type SesionCajaDetalle,
+  type SesionesPaginadasRespuesta,
   type UsuarioSesion,
 } from '@mb/shared';
 import { ZodPipe } from '../../shared-kernel/validation/zod.pipe';
@@ -49,6 +56,40 @@ export class CajaController {
     return this.caja.cerrar(id, usuario, body.efectivoContado);
   }
 
+  @Post('caja/sesiones/:id/movimientos')
+  @HttpCode(HttpStatus.CREATED)
+  async registrarMovimiento(
+    @Param('id', IdPipe) id: string,
+    @Body(new ZodPipe(movimientoCajaInputSchema)) body: MovimientoCajaInput,
+    @UsuarioActual() usuario: UsuarioSesion,
+  ): Promise<MovimientoCaja> {
+    return this.caja.registrarMovimiento(id, body, usuario);
+  }
+
+  @Get('caja/sesiones/:id/movimientos')
+  async listarMovimientos(
+    @Param('id', IdPipe) id: string,
+    @UsuarioActual() usuario: UsuarioSesion,
+  ): Promise<MovimientoCaja[]> {
+    return this.caja.listarMovimientos(id, usuario);
+  }
+
+  @Get('caja/sesiones')
+  async listarSesiones(
+    @Query(new ZodPipe(buscarSesionesQuerySchema)) query: BuscarSesionesQuery,
+    @UsuarioActual() usuario: UsuarioSesion,
+  ): Promise<SesionesPaginadasRespuesta> {
+    return this.caja.listarSesiones(query, usuario);
+  }
+
+  @Get('caja/sesiones/:id')
+  async sesionDetalle(
+    @Param('id', IdPipe) id: string,
+    @UsuarioActual() usuario: UsuarioSesion,
+  ): Promise<SesionCajaDetalle> {
+    return this.caja.obtenerSesionDetalle(id, usuario);
+  }
+
   @Post('caja/cobros')
   @HttpCode(HttpStatus.CREATED)
   async cobrar(
@@ -63,3 +104,4 @@ export class CajaController {
     return this.caja.obtenerRecibo(id);
   }
 }
+

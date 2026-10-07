@@ -74,7 +74,7 @@
 - [x] Recibo imprimible en formato térmico de 80 mm (`@media print`) con leyendas "Documento no fiscal" y "No responsable de INC" (RN-45).
 - [x] Pantalla de caja (`/caja`): resumen del turno, ventas acumuladas en efectivo y diálogo de cierre con cálculo de sobrante/faltante.
 - [ ] *Pendiente conocido:* Pagos mixtos (actualmente el cobro exige exactamente 1 método de pago en `caja.service.ts`).
-- [ ] *Pendiente conocido:* Movimientos manuales de caja (`INGRESO` / `RETIRO`, RN-46).
+- [x] Movimientos manuales de caja (`INGRESO` / `RETIRO`, RN-46), efectivo esperado con ingresos y retiros (RN-47) e historial de cierres con detalle (`GET /caja/sesiones`).
 
 ---
 
@@ -118,7 +118,7 @@ Lista de ítems técnicos y funcionales identificados que deben abordarse en las
    - Validar que la suma de los montos coincida exactamente con `total + propina` y que solo exista un pago en efectivo.
    - Habilitar en `CobroDialog` la adición de múltiples líneas de pago dinámicas.
 
-3. **Movimientos Manuales de Caja (RN-46):**
+3. **Movimientos Manuales de Caja (RN-46)** (completado en `feat/caja-completa`):
    - Crear tabla `movimiento_caja` (`id`, `sesion_caja_id`, `tipo IN ('INGRESO', 'RETIRO')`, `monto`, `motivo`, `usuario_id`, `created_at`).
    - Implementar endpoints `POST /caja/sesiones/:id/movimientos`.
    - Incluir los ingresos y retiros en el cálculo del `efectivo_esperado` al cerrar caja (`montoApertura + ventasEfectivo + ingresos - retiros`).

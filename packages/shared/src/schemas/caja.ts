@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { ESTADOS_SESION_CAJA, METODOS_PAGO, TIPOS_MOVIMIENTO_CAJA } from '../enums';
-import { pesosSchema, uuidSchema } from './common';
+import {
+  fechaOperativaSchema,
+  paginacionQuerySchema,
+  paginacionRespuestaSchema,
+  pesosSchema,
+  uuidSchema,
+} from './common';
 
 // --- Apertura de Sesión de Caja (RN-41) ---
 
@@ -23,8 +29,8 @@ export const movimientoCajaInputSchema = z.object({
   motivo: z
     .string()
     .trim()
-    .min(1, 'El motivo del movimiento es obligatorio (RN-46)')
-    .max(500, 'El motivo no puede superar 500 caracteres'),
+    .min(3, 'El motivo del movimiento es obligatorio y debe tener entre 3 y 140 caracteres (RN-46)')
+    .max(140, 'El motivo no puede superar 140 caracteres (RN-46)'),
 });
 export type MovimientoCajaInput = z.input<typeof movimientoCajaInputSchema>;
 export type MovimientoCajaOutput = z.infer<typeof movimientoCajaInputSchema>;
@@ -154,3 +160,74 @@ export const sesionCajaSchema = z.object({
   version: z.number().int().min(0),
 });
 export type SesionCaja = z.infer<typeof sesionCajaSchema>;
+
+// --- Historial y Detalle de Sesiones de Caja ---
+
+export const buscarSesionesQuerySchema = paginacionQuerySchema
+  .extend({
+    desde: fechaOperativaSchema.optional(),
+    hasta: fechaOperativaSchema.optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.desde && data.hasta) {
+        return data.desde <= data.hasta;
+      }
+      return true;
+    },
+    {
+      message: 'La fecha "desde" no puede ser posterior a "hasta"',
+      path: ['desde'],
+    },
+  );
+export type BuscarSesionesQuery = z.infer<typeof buscarSesionesQuerySchema>;
+
+export const cajeroResumenSchema = z.object({
+  id: uuidSchema,
+  nombre: z.string(),
+});
+export type CajeroResumen = z.infer<typeof cajeroResumenSchema>;
+
+export const sesionCajaResumenSchema = z.object({
+  id: uuidSchema,
+  usuarioId: uuidSchema,
+  cajero: cajeroResumenSchema,
+  estado: z.enum(ESTADOS_SESION_CAJA),
+  montoApertura: pesosSchema,
+  efectivoEsperado: pesosSchema.nullable().optional(),
+  efectivoContado: pesosSchema.nullable().optional(),
+  diferencia: z.number().int().nullable().optional(),
+  abiertaAt: z.string(),
+  cerradaAt: z.string().nullable().optional(),
+  version: z.number().int().min(0),
+});
+export type SesionCajaResumen = z.infer<typeof sesionCajaResumenSchema>;
+
+export const sesionesPaginadasRespuestaSchema = paginacionRespuestaSchema(sesionCajaResumenSchema);
+export type SesionesPaginadasRespuesta = z.infer<typeof sesionesPaginadasRespuestaSchema>;
+
+export const sesionCajaDetalleSchema = z.object({
+  id: uuidSchema,
+  usuarioId: uuidSchema,
+  cajero: cajeroResumenSchema,
+  estado: z.enum(ESTADOS_SESION_CAJA),
+  montoApertura: pesosSchema,
+  efectivoEsperado: pesosSchema.nullable().optional(),
+  efectivoContado: pesosSchema.nullable().optional(),
+  diferencia: z.number().int().nullable().optional(),
+  abiertaAt: z.string(),
+  cerradaAt: z.string().nullable().optional(),
+  version: z.number().int().min(0),
+  totalesPorMetodo: z.object({
+    efectivo: pesosSchema,
+    tarjeta: pesosSchema,
+    transferencia: pesosSchema,
+  }),
+  totalesMovimientos: z.object({
+    ingresos: pesosSchema,
+    retiros: pesosSchema,
+  }),
+  movimientos: z.array(movimientoCajaSchema),
+});
+export type SesionCajaDetalle = z.infer<typeof sesionCajaDetalleSchema>;
+
