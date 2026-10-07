@@ -18,16 +18,18 @@ interface Opciones {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   signal?: AbortSignal;
+  /** Cabeceras extra, p. ej. `Idempotency-Key` en confirmar, cobrar y abrir/cerrar caja. */
+  headers?: Record<string, string>;
 }
 
 /** Cliente HTTP de la app: misma origen (proxy de Vite / nginx), cookie de sesión automática. */
-export async function api<T>(ruta: string, { method = 'GET', body, signal }: Opciones = {}): Promise<T> {
+export async function api<T>(ruta: string, { method = 'GET', body, signal, headers }: Opciones = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`/api/v1${ruta}`, {
       method,
       credentials: 'same-origin',
-      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      headers: body === undefined ? headers : { 'content-type': 'application/json', ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
     });

@@ -1,10 +1,12 @@
-import { LayoutDashboard, SearchX, ShoppingCart, Wallet } from 'lucide-react';
+import { LayoutDashboard, SearchX } from 'lucide-react';
 import { createBrowserRouter, Link } from 'react-router';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { RedirigirPorRol, RequiereRol, RequiereSesion } from '@/features/auth/guards';
 import { LoginPage } from '@/features/auth/login-page';
-import { CocinaPage } from '@/features/cocina/cocina-page';
+import { cajaRoutes } from '@/features/caja/routes';
+import { cocinaRoutes } from '@/features/cocina/routes';
+import { posRoutes } from '@/features/pos/routes';
 import { t } from '@/i18n/es';
 import { AppShell } from './app-shell';
 import { PantallaPendiente } from './pantalla-pendiente';
@@ -33,33 +35,12 @@ export const router = createBrowserRouter([
     element: <RequiereSesion />,
     children: [
       { index: true, element: <RedirigirPorRol /> },
-      {
-        path: 'cocina',
-        element: (
-          <RequiereRol roles={['ADMIN', 'COCINA']}>
-            <CocinaPage />
-          </RequiereRol>
-        ),
-      },
+      ...cocinaRoutes,
       {
         element: <AppShell />,
         children: [
-          {
-            path: 'pos',
-            element: (
-              <RequiereRol roles={['ADMIN', 'CAJERO']}>
-                <PantallaPendiente titulo={t.nav.pos} icon={ShoppingCart} hito={2} />
-              </RequiereRol>
-            ),
-          },
-          {
-            path: 'caja',
-            element: (
-              <RequiereRol roles={['ADMIN', 'CAJERO']}>
-                <PantallaPendiente titulo={t.nav.caja} icon={Wallet} hito={4} />
-              </RequiereRol>
-            ),
-          },
+          ...posRoutes,
+          ...cajaRoutes,
           {
             path: 'admin',
             element: (
