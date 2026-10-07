@@ -51,6 +51,22 @@ export class CatalogoPublicService {
     return mapa;
   }
 
+  /** Datos de un producto para venderlo (RN-05, RN-13): `null` si no existe. */
+  async obtenerProductoParaVenta(
+    executor: Executor,
+    productoId: string,
+  ): Promise<{ id: string; nombre: string; precio: number; activo: boolean; agotado: boolean } | null> {
+    const fila = await this.repo.obtenerProductoPorId(productoId, executor);
+    if (!fila) return null;
+    return {
+      id: fila.id,
+      nombre: fila.nombre,
+      precio: fila.precio,
+      activo: fila.activo,
+      agotado: fila.agotado,
+    };
+  }
+
   async obtenerProductoIdsPorIngrediente(ingredienteId: string, tx?: Executor) {
     return this.repo.obtenerProductoIdsPorIngrediente(ingredienteId, tx);
   }

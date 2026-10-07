@@ -9,7 +9,7 @@ import { crearDb, crearPool, DB, PG_POOL } from './db';
     {
       provide: PG_POOL,
       inject: [ENV],
-      useFactory: (env: Env) => crearPool(env.DATABASE_URL),
+      useFactory: (env: Env) => crearPool(env.DATABASE_URL, env.DB_POOL_MAX),
     },
     {
       provide: DB,

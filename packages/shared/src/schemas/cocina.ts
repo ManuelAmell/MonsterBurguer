@@ -41,7 +41,8 @@ export const transicionComandaSchema = z.object({
   version: z
     .number()
     .int('La versión debe ser un número entero')
-    .min(0, 'La versión debe ser mayor o igual a 0'),
+    .min(0, 'La versión debe ser mayor o igual a 0')
+    .optional(),
 });
 export type TransicionComandaInput = z.input<typeof transicionComandaSchema>;
 export type TransicionComandaOutput = z.infer<typeof transicionComandaSchema>;
@@ -49,7 +50,11 @@ export type TransicionComandaOutput = z.infer<typeof transicionComandaSchema>;
 // --- Consulta de Comandas ---
 
 export const listarComandasQuerySchema = z.object({
-  activas: z.coerce.boolean().optional(),
+  // z.coerce.boolean() convertiría "false" en true: se parsea el texto de la query explícitamente.
+  activas: z
+    .enum(['true', 'false', '1', '0'])
+    .transform((v) => v === 'true' || v === '1')
+    .optional(),
   estado: z.enum(ESTADOS_COMANDA).optional(),
 });
 export type ListarComandasQuery = z.infer<typeof listarComandasQuerySchema>;

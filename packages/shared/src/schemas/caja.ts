@@ -84,7 +84,8 @@ export const cobroSchema = z
     pedidoVersion: z
       .number()
       .int('La versión del pedido debe ser un entero')
-      .min(0, 'La versión del pedido no puede ser negativa'),
+      .min(0, 'La versión del pedido no puede ser negativa')
+      .optional(),
     propina: pesosSchema.default(0),
     pagos: z
       .array(pagoCobroItemSchema)
@@ -121,7 +122,8 @@ export const cerrarSesionCajaSchema = z.object({
   version: z
     .number()
     .int('La versión debe ser un entero')
-    .min(0, 'La versión no puede ser negativa'),
+    .min(0, 'La versión no puede ser negativa')
+    .optional(),
 });
 export type CerrarSesionCajaInput = z.input<typeof cerrarSesionCajaSchema>;
 export type CerrarSesionCajaOutput = z.infer<typeof cerrarSesionCajaSchema>;

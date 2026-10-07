@@ -100,6 +100,7 @@ describe('schemas/cocina', () => {
       expect(listarComandasQuerySchema.parse({ activas: 'true' })).toEqual({
         activas: true,
       });
+      expect(listarComandasQuerySchema.parse({ activas: 'false' })).toEqual({ activas: false });
       expect(listarComandasQuerySchema.parse({ estado: 'EN_PREPARACION' })).toEqual({
         estado: 'EN_PREPARACION',
       });

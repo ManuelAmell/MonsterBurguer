@@ -2,3 +2,4 @@
 export { PedidosService } from './pedidos.service';
 export { PedidosModule } from './pedidos.module';
 export type { MesaFila } from './pedidos.repository';
+export type { PedidoParaCobro } from './pedidos.service';

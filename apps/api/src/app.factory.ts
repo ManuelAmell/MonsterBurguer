@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import type { Env } from './config/env';
@@ -14,7 +15,8 @@ export async function crearApp(env: Env): Promise<INestApplication> {
   });
   app.useLogger(app.get(Logger));
   app.setGlobalPrefix('api/v1');
-  app.set('trust proxy', 'loopback');
+  app.set('trust proxy', env.TRUST_PROXY);
+  app.use(helmet());
   app.use(cookieParser());
   app.useGlobalFilters(new AllExceptionsFilter());
   app.enableShutdownHooks();
