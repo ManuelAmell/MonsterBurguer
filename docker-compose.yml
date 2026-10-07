@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mb}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mb_dev_pass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env (ver .env.example)}
       POSTGRES_DB: ${POSTGRES_DB:-monsterburguer}
     ports:
       - "5432:5432"
@@ -26,9 +26,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-mb}:${POSTGRES_PASSWORD:-mb_dev_pass}@postgres:5432/${POSTGRES_DB:-monsterburguer}
-      SESSION_SECRET: ${SESSION_SECRET:-mb_secret_super_secure_key_production}
-      APP_ORIGIN: http://localhost
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mb}:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-monsterburguer}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
       TZ: America/Bogota
       LOG_LEVEL: info
     ports:
