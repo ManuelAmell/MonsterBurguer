@@ -1,0 +1,79 @@
+@startuml actividad_preparacion_cocina
+!pragma layout smetana
+skinparam shadowing false
+
+title Proceso Específico 2 - Preparación y Gestión de Comandas en Cocina (KDS)
+
+|#F3E5F5|Cocinero|
+|#EDE7F6|Pantalla KDS (SPA React)|
+|#E8F5E9|Módulo Cocina (API NestJS)|
+|#E0F2F1|Realtime / EventBus|
+
+|Realtime / EventBus|
+start
+:Recibe evento PedidoConfirmado vía Outbox;
+:Emite mensaje SSE comanda.nueva a canal cocina;
+
+|Pantalla KDS (SPA React)|
+:Recibe evento SSE en tiempo real;
+:Agrega nueva tarjeta a columna "Pendiente";
+:Inicia cronómetro visual con conteo transcurrido;
+
+|Cocinero|
+:Observa la comanda en pantalla de cocina;
+:Presiona botón "Iniciar Preparación";
+
+|Pantalla KDS (SPA React)|
+:Envía POST /api/v1/comandas/{id}/iniciar;
+
+|Módulo Cocina (API NestJS)|
+:Valida transición PENDIENTE -> EN_PREPARACION;
+:Actualiza estado y marca iniciada_at = now();
+:Registra evento ComandaIniciada en outbox;
+
+|Pantalla KDS (SPA React)|
+:Mueve tarjeta a columna "En Preparación";
+
+|Cocinero|
+:Elabora hamburguesas y productos según receta y notas;
+
+|Pantalla KDS (SPA React)|
+if (¿Tiempo transcurrido >= 8 min?) then (Sí)
+    :Aplica estilo naranja de alerta (Aviso);
+endif
+if (¿Tiempo transcurrido >= 12 min?) then (Sí)
+    :Aplica estilo rojo de alerta crítica (Grave);
+endif
+
+|Cocinero|
+:Termina elaboración física de la comanda;
+:Presiona botón "Marcar Lista";
+
+|Pantalla KDS (SPA React)|
+:Envía POST /api/v1/comandas/{id}/lista;
+
+|Módulo Cocina (API NestJS)|
+:Valida transición EN_PREPARACION -> LISTA;
+:Actualiza estado y marca lista_at = now();
+:Registra evento ComandaLista en outbox;
+
+|Realtime / EventBus|
+:Despacha comanda.estado a canal pos;
+note right: POS emite notificación sonora y visual de pedido listo
+
+|Pantalla KDS (SPA React)|
+:Mueve tarjeta a columna "Lista";
+
+|Cocinero|
+:Entrega bandeja al mesero o cajero de mostrador;
+:Presiona botón "Entregar";
+
+|Módulo Cocina (API NestJS)|
+:Actualiza estado a ENTREGADA y marca entregada_at = now();
+:Registra evento ComandaEntregada en outbox;
+
+|Pantalla KDS (SPA React)|
+:Remueve comanda de la vista activa del KDS;
+stop
+
+@enduml

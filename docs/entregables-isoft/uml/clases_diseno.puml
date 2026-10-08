@@ -1,0 +1,139 @@
+@startuml clases_diseno
+!pragma layout smetana
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam roundCorner 6
+skinparam defaultFontSize 11
+
+title Diagrama de Clases de Diseño - Arquitectura NestJS
+
+package "Módulo Pedidos" {
+    class PedidosController {
+        +crearPedido(dto): Promise<PedidoDto>
+        +confirmarPedido(id): Promise<ResultadoDto>
+    }
+
+    class PedidosService {
+        -pedidosRepo: PedidosRepository
+        -inventarioPublic: InventarioPublicService
+        -cocinaPublic: CocinaPublicService
+        -eventBus: EventBus
+        +confirmarBloqueado(id, uid): Promise<Resultado>
+        +prepararCobro(tx, id, uid): Promise<Pedido>
+        +cerrar(tx, id): Promise<Pedido>
+    }
+
+    class PedidosRepository {
+        +bloquearParaActualizar(id, tx): Promise<Pedido>
+        +siguienteNumeroDia(fecha, tx): Promise<Integer>
+    }
+
+    class PedidosPublicService {
+        +prepararCobro(tx, id, uid): Promise<Pedido>
+        +cerrar(tx, id): Promise<Pedido>
+    }
+}
+
+package "Módulo Inventario" {
+    class InventarioService {
+        -inventarioRepo: InventarioRepository
+        -eventBus: EventBus
+        +consumir(tx, items, uid, pedId): Promise<void>
+        +registrarEntrada(dto): Promise<Movimiento>
+        +reevaluarDisponibilidad(tx): Promise<void>
+    }
+
+    class InventarioRepository {
+        +bloquearIngredientes(ids, tx): Promise<Ingrediente[]>
+        +descontarStock(id, cant, tx): Promise<void>
+    }
+
+    class InventarioPublicService {
+        +consumir(tx, items, uid, pedId): Promise<void>
+    }
+}
+
+package "Módulo Cocina" {
+    class CocinaController {
+        +iniciarComanda(id): Promise<ComandaDto>
+        +marcarLista(id): Promise<ComandaDto>
+        +marcarEntregada(id): Promise<ComandaDto>
+    }
+
+    class CocinaService {
+        -cocinaRepo: CocinaRepository
+        -eventBus: EventBus
+        +crearComanda(tx, datos): Promise<UUID>
+        +transicionar(id, estado, uid): Promise<Comanda>
+    }
+
+    class CocinaRepository {
+        +crear(comanda, items, tx): Promise<UUID>
+        +actualizarEstado(id, estado, tx): Promise<Comanda>
+    }
+
+    class CocinaPublicService {
+        +crearComanda(tx, datos): Promise<UUID>
+    }
+}
+
+package "Módulo Caja" {
+    class CajaController {
+        +abrirSesion(dto): Promise<SesionDto>
+        +cobrar(dto): Promise<ReciboDto>
+        +cerrarSesion(id, dto): Promise<ResumenDto>
+    }
+
+    class CajaService {
+        -cajaRepo: CajaRepository
+        -pedidosPublic: PedidosPublicService
+        -eventBus: EventBus
+        +abrir(uid, monto): Promise<SesionCaja>
+        +cobrar(uid, dto): Promise<Recibo>
+        +cerrar(sesionId, contado): Promise<ResumenCierre>
+    }
+
+    class CajaRepository {
+        +buscarSesionAbierta(uid, tx): Promise<SesionCaja>
+        +insertarRecibo(recibo, pago, tx): Promise<Recibo>
+    }
+}
+
+package "Shared Kernel" {
+    class EventBus {
+        +publicarEnTx(tx, evento): Promise<void>
+        +alPublicarEnTx(tipo, handler): void
+        +despuesDeCommit(tipo, handler): void
+    }
+
+    class OutboxDispatcher {
+        -db: NodePgDatabase
+        +procesarPendientes(): Promise<void>
+    }
+}
+
+' Relaciones internas
+PedidosController --> PedidosService
+PedidosService --> PedidosRepository
+PedidosService --> InventarioPublicService
+PedidosService --> CocinaPublicService
+PedidosService --> EventBus
+PedidosPublicService --> PedidosService
+
+InventarioService --> InventarioRepository
+InventarioService --> EventBus
+InventarioPublicService --> InventarioService
+
+CocinaController --> CocinaService
+CocinaService --> CocinaRepository
+CocinaService --> EventBus
+CocinaPublicService --> CocinaService
+
+CajaController --> CajaService
+CajaService --> CajaRepository
+CajaService --> PedidosPublicService
+CajaService --> EventBus
+
+OutboxDispatcher --> EventBus
+
+@enduml

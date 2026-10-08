@@ -1,0 +1,46 @@
+@startuml cu_cajero
+!pragma layout smetana
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam roundCorner 8
+skinparam defaultFontSize 12
+
+actor "Cajero" as Cajero
+
+rectangle "MonsterBurguer POS - Operación de Mostrador" {
+
+    package "Módulo Pedidos (POS)" {
+        usecase "CU-03: Crear Pedido" as CU03
+        usecase "CU-04: Agregar Ítems y Nota" as CU04
+        usecase "CU-05: Enviar Pedido a Cocina" as CU05
+        usecase "CU-06: Consultar Pedidos Activos" as CU06
+        usecase "Seleccionar Mesa Disponible" as UC_Mesa
+    }
+
+    package "Módulo Caja" {
+        usecase "CU-08: Abrir Sesión de Caja" as CU08
+        usecase "CU-09: Cobrar Pedido y Emitir Recibo" as CU09
+        usecase "CU-10: Registrar Movimiento de Caja" as CU10
+        usecase "CU-11: Cerrar Sesión de Caja" as CU11
+        usecase "Imprimir Recibo 80 mm" as UC_Print
+    }
+
+    usecase "CU-01: Iniciar Sesión" as CU01
+
+    CU03 ..> UC_Mesa : <<extend>>
+    CU05 ..> CU04 : <<include>>
+    CU09 ..> UC_Print : <<include>>
+}
+
+Cajero --> CU01
+Cajero --> CU03
+Cajero --> CU04
+Cajero --> CU05
+Cajero --> CU06
+Cajero --> CU08
+Cajero --> CU09
+Cajero --> CU10
+Cajero --> CU11
+
+@enduml

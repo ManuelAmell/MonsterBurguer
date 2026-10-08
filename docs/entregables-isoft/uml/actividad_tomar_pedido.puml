@@ -1,0 +1,76 @@
+@startuml actividad_tomar_pedido
+!pragma layout smetana
+skinparam shadowing false
+skinparam defaultFontSize 11
+
+title Proceso Específico 1 - Toma y Confirmación de Pedido (POS)
+
+|#FFF3E0|Cajero|
+|#E8F5E9|Módulo Pedidos|
+|#FFFDE7|Módulo Inventario|
+
+|Cajero|
+start
+:Selecciona tipo de pedido;
+if (¿Es MESA?) then (Sí)
+    :Selecciona mesa del mapa;
+    |Módulo Pedidos|
+    if (¿Mesa ocupada?) then (Sí)
+        |Cajero|
+        :Alerta "Mesa ocupada";
+        stop
+    else (No)
+        :Asocia mesa al pedido;
+    endif
+else (No, Llevar)
+    |Módulo Pedidos|
+    :Asigna mesa como nula;
+endif
+
+|Módulo Pedidos|
+:Crea pedido en estado ABIERTO;
+
+|Cajero|
+repeat
+    :Toca producto en el menú;
+    if (¿Agotado?) then (Sí)
+        :Bloquea selección;
+    else (No)
+        :Agrega ítem a ticket (snapshot precio);
+        if (¿Tiene nota?) then (Sí)
+            :Ingresa nota culinaria (máx 140 ch);
+        endif
+    endif
+repeat while (¿Más productos?) is (Sí)
+
+:Presiona "Enviar a cocina";
+
+|Módulo Pedidos|
+:Inicia Transacción Atómica (tx);
+:Llama a InventarioService.consumir(tx);
+
+|Módulo Inventario|
+:SELECT FOR UPDATE de ingredientes\nordenados por ID ascendente;
+if (¿Stock suficiente?) then (No)
+    :Retorna 409 STOCK_INSUFICIENTE;
+    |Módulo Pedidos|
+    :Ejecuta ROLLBACK de la transacción;
+    |Cajero|
+    :Muestra modal con faltantes;
+    stop
+else (Sí)
+    :Descuenta stock y registra CONSUMO;
+endif
+
+|Módulo Pedidos|
+:Crea comanda en estado PENDIENTE;
+:Actualiza pedido a CONFIRMADO;
+:Inserta evento PedidoConfirmado en outbox;
+:Ejecuta COMMIT de la transacción;
+:Notifica al hub SSE vía pg_notify;
+
+|Cajero|
+:Ticket queda confirmado en solo lectura;
+stop
+
+@enduml

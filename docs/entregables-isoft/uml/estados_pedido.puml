@@ -1,0 +1,47 @@
+@startuml estados_pedido
+!pragma layout smetana
+skinparam state {
+    BackgroundColor White
+    BorderColor Black
+    ArrowColor Black
+}
+skinparam shadowing false
+
+title Máquina de Estados del Pedido - MonsterBurguer POS
+
+[*] --> ABIERTO : Crear pedido (Mesa o Llevar)
+
+state ABIERTO {
+    ABIERTO : El cajero agrega, modifica o retira ítems
+    ABIERTO : Se asocian notas culinarias
+    ABIERTO : Se asigna mesa (si aplica)
+}
+
+ABIERTO --> CONFIRMADO : Enviar a cocina\n[Stock suficiente y >= 1 ítem]\n(descuenta stock y crea comanda)
+ABIERTO --> ANULADO : Anulación manual\n(solo ADMIN con motivo >= 5 chars)
+
+state CONFIRMADO {
+    CONFIRMADO : El ticket está protegido contra edición
+    CONFIRMADO : Comanda activa en cocina (KDS)
+    CONFIRMADO : Stock descontado en inventario
+}
+
+CONFIRMADO --> CERRADO : Cobrar pedido\n[Sesión de caja abierta]\n(emite recibo y libera mesa)
+CONFIRMADO --> ANULADO : Anulación administrativa\n(ADMIN con motivo)\n(registra merma/reversión)
+
+state CERRADO {
+    CERRADO : Pedido pagado y liquidado
+    CERRADO : Recibo no fiscal emitido
+    CERRADO : Estado terminal inmutable
+}
+
+state ANULADO {
+    ANULADO : Pedido cancelado
+    ANULADO : Comanda anulada en KDS
+    ANULADO : Estado terminal inmutable
+}
+
+CERRADO --> [*]
+ANULADO --> [*]
+
+@enduml

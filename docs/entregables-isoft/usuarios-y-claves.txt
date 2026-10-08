@@ -1,0 +1,22 @@
+================================================================================
+MONSTERBURGUER POS — CREDENCIALES DE ACCESO AL SISTEMA (DEMOSTRACIÓN)
+================================================================================
+
+El sistema MonsterBurguer POS cuenta con autenticación basada en roles (RBAC) y
+sesiones seguras en base de datos. Para efectos de prueba, demostración y evaluación
+académica, se encuentran preconfiguradas las siguientes cuentas en la semilla (seed):
+
+--------------------------------------------------------------------------------
+ROL                    USUARIO         CONTRASEÑA         DESTINO EN LA APLICACIÓN
+--------------------------------------------------------------------------------
+Administrador          admin           admin123           /admin (Panel y Gestión)
+Cajero                 caja1           caja1234           /pos, /caja (POS y Arqueo)
+Cocinero               cocina1         cocina1234         /cocina (Pantalla KDS)
+--------------------------------------------------------------------------------
+
+NOTA DE SEGURIDAD:
+Estas claves son exclusivas para entornos de demostración y evaluación académica.
+En un despliegue de producción real, cada usuario debe registrarse con contraseñas
+robustas almacenadas con cifrado irreversible mediante el algoritmo Argon2id,
+tal como lo implementa el módulo de identidad del sistema.
+================================================================================

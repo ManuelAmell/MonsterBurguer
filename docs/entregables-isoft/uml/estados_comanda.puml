@@ -1,0 +1,54 @@
+@startuml estados_comanda
+!pragma layout smetana
+skinparam state {
+    BackgroundColor White
+    BorderColor Black
+    ArrowColor Black
+}
+skinparam shadowing false
+
+title Máquina de Estados de la Comanda (KDS) - MonsterBurguer POS
+
+[*] --> PENDIENTE : Confirmación de pedido (1:1)
+
+state PENDIENTE {
+    PENDIENTE : Comanda entra en cola de cocina
+    PENDIENTE : Se muestra tarjeta con cronómetro en cero
+    PENDIENTE : Notificación visual y sonora en KDS
+}
+
+PENDIENTE --> EN_PREPARACION : Cocinero presiona "Iniciar"\n[iniciada_at = now()]
+PENDIENTE --> ANULADA : Cancelación de pedido\n(reversión de inventario)
+
+state EN_PREPARACION {
+    EN_PREPARACION : Cocinero elabora alimentos
+    EN_PREPARACION : Alerta visual amarilla si >= 8 min
+    EN_PREPARACION : Alerta visual roja crítica si >= 12 min
+}
+
+EN_PREPARACION --> LISTA : Cocinero presiona "Marcar Lista"\n[lista_at = now()]\n(emite comanda.estado a POS)
+EN_PREPARACION --> ANULADA : Cancelación de pedido\n(registra merma de ingredientes)
+
+state LISTA {
+    LISTA : Alimentos listos para despacho
+    LISTA : Notificación emergente en POS de mostrador
+    LISTA : Mesero/cajero recoge bandeja
+}
+
+LISTA --> ENTREGADA : Cocinero/cajero presiona "Entregar"\n[entregada_at = now()]
+
+state ENTREGADA {
+    ENTREGADA : Alimentos entregados al comensal
+    ENTREGADA : Desaparece del tablero activo del KDS
+    ENTREGADA : Permanece para cálculo de métricas (v_tiempos_cocina)
+}
+
+state ANULADA {
+    ANULADA : Comanda descartada por anulación de pedido
+    ANULADA : Se retira de la pantalla KDS
+}
+
+ENTREGADA --> [*]
+ANULADA --> [*]
+
+@enduml

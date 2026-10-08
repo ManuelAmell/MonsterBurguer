@@ -1,0 +1,43 @@
+@startuml cu_admin
+!pragma layout smetana
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam roundCorner 8
+skinparam defaultFontSize 12
+
+actor "Administrador" as Admin
+
+rectangle "MonsterBurguer POS - Módulo Administración" {
+
+    usecase "CU-01: Iniciar Sesión" as CU01
+    usecase "CU-02: Gestionar Usuarios" as CU02
+
+    package "Menú e Inventario" {
+        usecase "CU-12: Gestionar Productos y Menú" as CU12
+        usecase "CU-13: Gestionar Recetas y Disponibilidad" as CU13
+        usecase "CU-14: Registrar Entrada de Mercancía" as CU14
+        usecase "CU-15: Registrar Ajuste o Merma" as CU15
+        usecase "CU-16: Consultar Kardex de Inventario" as CU16
+    }
+
+    package "Analítica y Auditoría" {
+        usecase "CU-17: Consultar Dashboard y KPIs" as CU17
+        usecase "CU-18: Consultar Bitácora y Auditoría" as CU18
+        usecase "Consultar Historial de Cierres de Caja" as UC_HistorialCierres
+    }
+
+    CU17 ..> UC_HistorialCierres : <<extend>>
+}
+
+Admin --> CU01
+Admin --> CU02
+Admin --> CU12
+Admin --> CU13
+Admin --> CU14
+Admin --> CU15
+Admin --> CU16
+Admin --> CU17
+Admin --> CU18
+
+@enduml

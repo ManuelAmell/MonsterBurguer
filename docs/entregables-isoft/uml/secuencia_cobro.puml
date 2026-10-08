@@ -1,0 +1,69 @@
+@startuml secuencia_cobro
+!pragma layout smetana
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam ParticipantPadding 10
+skinparam BoxPadding 5
+autonumber
+
+actor "Cajero" as Cajero
+participant "Web POS\n(React)" as POS
+participant "CajaController" as CajaCtrl
+participant "CajaService" as CajaSrv
+participant "PedidosPublic" as PedPub
+participant "EventBus" as Bus
+database "PostgreSQL\n(Drizzle)" as DB
+participant "OutboxDispatcher" as Outbox
+participant "Realtime\n(SSE)" as RT
+
+Cajero -> POS: Abre cobro, ingresa método y dinero
+POS -> CajaCtrl: POST /api/v1/caja/cobros { pedidoId, pagos }
+CajaCtrl -> CajaSrv: cobrar(usuarioId, cobroDto)
+
+activate CajaSrv
+CajaSrv -> DB: BEGIN Transaction (tx)
+CajaSrv -> DB: SELECT * FROM sesion_caja\nWHERE uid = :uid AND estado = 'ABIERTA' FOR UPDATE
+note right: Valida sesión de caja activa
+
+CajaSrv -> PedPub: prepararCobro(tx, pedidoId, usuarioId)
+activate PedPub
+PedPub -> DB: SELECT * FROM pedido WHERE id = :id FOR UPDATE
+PedPub --> CajaSrv: Pedido validado (total, base, imp)
+deactivate PedPub
+
+CajaSrv -> CajaSrv: Valida recibido >= total + propina
+CajaSrv -> CajaSrv: Calcula cambio en efectivo
+
+CajaSrv -> DB: INSERT INTO recibo (nextval seq, total, propina)
+CajaSrv -> DB: INSERT INTO pago (metodo, recibido, cambio)
+
+CajaSrv -> PedPub: cerrar(tx, pedidoId)
+activate PedPub
+PedPub -> DB: UPDATE pedido SET estado = 'CERRADO', cerrado_at = now()
+PedPub -> DB: Libera mesa asignada si aplica
+PedPub --> CajaSrv: Pedido cerrado
+deactivate PedPub
+
+CajaSrv -> Bus: publicarEnTx(tx, PedidoCobrado)
+Bus -> DB: INSERT INTO evento_sistema\nSELECT pg_notify('evento_sistema')
+
+CajaSrv -> DB: COMMIT Transaction
+deactivate CajaSrv
+
+CajaSrv --> CajaCtrl: Recibo { id, numero, cambio }
+CajaCtrl --> POS: HTTP 201 { reciboId, cambio }
+POS --> Cajero: Muestra cambio y abre impresión 80 mm
+
+== Notificación en Tiempo Real (Post-Commit) ==
+
+DB -->> Outbox: NOTIFY evento_sistema
+activate Outbox
+Outbox -> DB: SELECT FOR UPDATE SKIP LOCKED
+Outbox -> Bus: ejecutarHandlers(evento)
+Bus -> RT: notificar(PedidoCobrado)
+Outbox -> DB: UPDATE evento_sistema SET procesado_at = now()
+deactivate Outbox
+
+RT -> POS: SSE dispatch ("pedido.cobrado") -> actualiza mesas y KPIs
+
+@enduml

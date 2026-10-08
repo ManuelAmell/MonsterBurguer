@@ -1,0 +1,236 @@
+@startuml modelo_dominio
+!pragma layout smetana
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+title Modelo de Dominio Conceptual - Negocio MonsterBurguer POS
+
+class Restaurante {
+    +nombre: String
+    +regimenTributario: String
+    +moneda: String = "COP"
+}
+
+class Usuario {
+    +id: UUID
+    +nombre: String
+    +username: String
+    +rol: RolUsuario
+    +activo: Boolean
+}
+
+enum RolUsuario {
+    ADMIN
+    CAJERO
+    COCINA
+}
+
+class Categoria {
+    +id: UUID
+    +nombre: String
+    +orden: Integer
+    +activa: Boolean
+}
+
+class Producto {
+    +id: UUID
+    +nombre: String
+    +precio: BigInt
+    +activo: Boolean
+    +agotado: Boolean
+    +agotadoManual: Boolean
+}
+
+class RecetaItem {
+    +cantidad: Integer
+}
+
+class Ingrediente {
+    +id: UUID
+    +nombre: String
+    +unidad: UnidadMedida
+    +stockActual: BigInt
+    +stockMinimo: BigInt
+    +costoUnitario: BigInt
+}
+
+enum UnidadMedida {
+    G
+    ML
+    UND
+}
+
+class MovimientoInventario {
+    +id: UUID
+    +tipo: TipoMovimiento
+    +cantidad: BigInt
+    +stockResultante: BigInt
+    +motivo: String
+    +createdAt: DateTime
+}
+
+enum TipoMovimiento {
+    CONSUMO
+    ENTRADA
+    AJUSTE
+    MERMA
+    REVERSION
+}
+
+class Mesa {
+    +id: UUID
+    +nombre: String
+    +capacidad: Integer
+    +activa: Boolean
+}
+
+class Cliente {
+    +id: UUID
+    +nombre: String
+    +telefono: String
+    +documento: String
+}
+
+class Pedido {
+    +id: UUID
+    +fechaOperativa: Date
+    +numeroDia: Integer
+    +tipo: TipoPedido
+    +estado: EstadoPedido
+    +total: BigInt
+    +base: BigInt
+    +impuesto: BigInt
+    +nota: String
+    +version: Integer
+}
+
+enum TipoPedido {
+    MESA
+    LLEVAR
+}
+
+enum EstadoPedido {
+    ABIERTO
+    CONFIRMADO
+    CERRADO
+    ANULADO
+}
+
+class PedidoItem {
+    +id: UUID
+    +nombreProducto: String
+    +precioUnitario: BigInt
+    +cantidad: Integer
+    +totalLinea: BigInt
+    +nota: String
+}
+
+class Comanda {
+    +id: UUID
+    +numeroDia: Integer
+    +tipoPedido: TipoPedido
+    +mesaNombre: String
+    +estado: EstadoComanda
+    +iniciadaAt: DateTime
+    +listaAt: DateTime
+    +entregadaAt: DateTime
+}
+
+enum EstadoComanda {
+    PENDIENTE
+    EN_PREPARACION
+    LISTA
+    ENTREGADA
+    ANULADA
+}
+
+class ComandaItem {
+    +id: UUID
+    +nombre: String
+    +cantidad: Integer
+    +nota: String
+}
+
+class SesionCaja {
+    +id: UUID
+    +estado: EstadoSesionCaja
+    +montoApertura: BigInt
+    +efectivoEsperado: BigInt
+    +efectivoContado: BigInt
+    +diferencia: BigInt
+    +abiertaAt: DateTime
+    +cerradaAt: DateTime
+}
+
+enum EstadoSesionCaja {
+    ABIERTA
+    CERRADA
+}
+
+class MovimientoCaja {
+    +id: UUID
+    +tipo: TipoMovimientoCaja
+    +monto: BigInt
+    +motivo: String
+    +createdAt: DateTime
+}
+
+enum TipoMovimientoCaja {
+    INGRESO
+    RETIRO
+}
+
+class Recibo {
+    +id: UUID
+    +numero: BigInt
+    +total: BigInt
+    +base: BigInt
+    +impuesto: BigInt
+    +propina: BigInt
+    +regimenTributario: String
+    +createdAt: DateTime
+}
+
+class Pago {
+    +id: UUID
+    +metodo: MetodoPago
+    +monto: BigInt
+    +recibido: BigInt
+    +cambio: BigInt
+    +referencia: String
+}
+
+enum MetodoPago {
+    EFECTIVO
+    TARJETA
+    TRANSFERENCIA
+}
+
+Restaurante "1" *-- "0..*" Categoria
+Restaurante "1" *-- "0..*" Mesa
+Restaurante "1" *-- "0..*" Usuario
+Restaurante "1" *-- "0..*" Ingrediente
+
+Categoria "1" o-- "0..*" Producto
+Producto "1" *-- "1..*" RecetaItem
+RecetaItem "0..*" --* "1" Ingrediente
+Ingrediente "1" *-- "0..*" MovimientoInventario
+
+Usuario "1" -- "0..*" Pedido : registra
+Usuario "1" -- "0..*" SesionCaja : opera
+Usuario "1" -- "0..*" MovimientoInventario : ejecuta
+
+Mesa "0..1" -- "0..*" Pedido : asignada a
+Cliente "0..1" -- "0..*" Pedido : solicita
+Pedido "1" *-- "1..*" PedidoItem
+Producto "1" ..> PedidoItem : snapshot precio/nombre
+
+Pedido "1" -- "0..1" Comanda : genera (1:1 al confirmar)
+Comanda "1" *-- "1..*" ComandaItem
+
+SesionCaja "1" *-- "0..*" Recibo : agrupa
+SesionCaja "1" *-- "0..*" MovimientoCaja : registra
+Pedido "1" -- "0..1" Recibo : liquida (1:1 al cobrar)
+Recibo "1" *-- "1" Pago : cubre
+
+@enduml

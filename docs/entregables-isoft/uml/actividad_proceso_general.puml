@@ -1,0 +1,76 @@
+@startuml actividad_proceso_general
+!pragma layout smetana
+skinparam shadowing false
+
+title Proceso General de Negocio - Venta y Servicio Integral en MonsterBurguer
+
+|#E8F4F8|Cliente|
+|#FFF3E0|Cajero (POS / Caja)|
+|#F3E5F5|Cocina (KDS)|
+|#E8F5E9|Sistema POS|
+
+|Cliente|
+start
+:Llega al mostrador o toma asiento en mesa;
+:Selecciona productos del menú;
+
+|Cajero (POS / Caja)|
+:Abre la aplicación e inicia sesión;
+:Crea nuevo pedido (Mesa o Llevar);
+:Agrega productos, cantidades y notas;
+:Presiona "Enviar a cocina";
+
+|Sistema POS|
+:Inicia transacción ACID;
+:Bloquea ingredientes requeridos (SELECT FOR UPDATE);
+if (¿Hay stock suficiente?) then (Sí)
+    :Descuenta stock y registra kardex (CONSUMO);
+    :Crea comanda en estado PENDIENTE;
+    :Cambia pedido a CONFIRMADO;
+    :Registra evento en outbox (PedidoConfirmado);
+    :Commit de transacción;
+    :Despacha evento vía SSE;
+else (No)
+    :Rollback de transacción;
+    |Cajero (POS / Caja)|
+    :Muestra alerta de stock insuficiente;
+    stop
+endif
+
+|Cocina (KDS)|
+:Recibe notificación instantánea de comanda;
+:Inicia preparación (estado EN_PREPARACION);
+:Finaliza elaboración (estado LISTA);
+:Notifica despacho de alimentos;
+
+|Cajero (POS / Caja)|
+:Visualiza pedido listo en pantalla POS;
+:Solicita pago al cliente (Total + Propina voluntaria si es mesa);
+
+|Cliente|
+:Realiza el pago (Efectivo, Tarjeta o Transferencia);
+
+|Cajero (POS / Caja)|
+:Registra método de pago y monto recibido;
+
+|Sistema POS|
+:Inicia transacción de cobro;
+:Valida sesión de caja activa;
+:Genera recibo consecutivo R-XXXXXX;
+:Cierra el pedido (estado CERRADO);
+:Libera mesa si aplica;
+:Registra evento PedidoCobrado en outbox;
+:Commit de cobro;
+
+|Cajero (POS / Caja)|
+:Imprime comprobante de venta POS (80 mm);
+:Entrega comprobante y alimentos al cliente;
+
+|Cliente|
+:Recibe orden y comprobante;
+
+|Sistema POS|
+:Actualiza KPIs de ventas y tiempos de cocina en Dashboard de Administración;
+stop
+
+@enduml

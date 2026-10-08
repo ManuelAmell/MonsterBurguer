@@ -1,0 +1,32 @@
+@startuml cu_cocina
+!pragma layout smetana
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam roundCorner 8
+skinparam defaultFontSize 12
+
+actor "Personal de Cocina" as Cocinero
+
+rectangle "MonsterBurguer POS - Sistema KDS de Cocina" {
+
+    usecase "CU-01: Iniciar Sesión" as CU01
+
+    package "Gestión de Comandas en Vivo" {
+        usecase "CU-07: Preparar Comanda" as CU07
+        usecase "Iniciar Preparación" as UC_Iniciar
+        usecase "Marcar Comanda Lista" as UC_Lista
+        usecase "Marcar Comanda Entregada" as UC_Entregada
+        usecase "Visualizar Alertas de Demora" as UC_Alertas
+    }
+
+    CU07 <|-- UC_Iniciar
+    CU07 <|-- UC_Lista
+    CU07 <|-- UC_Entregada
+    CU07 ..> UC_Alertas : <<extend>>
+}
+
+Cocinero --> CU01
+Cocinero --> CU07
+
+@enduml

@@ -1,0 +1,82 @@
+@startuml actividad_cobro_cierre_caja
+!pragma layout smetana
+skinparam shadowing false
+
+title Proceso Específico 3 - Cobro de Pedido y Cierre de Turno de Caja
+
+|#FFF3E0|Cajero|
+|#E8F5E9|Módulo Caja|
+|#EDE7F6|Módulo Pedidos|
+
+|Cajero|
+start
+:Abre diálogo de cobro desde el POS;
+if (¿Tiene sesión de caja ABIERTA?) then (No)
+    :Sistema solicita apertura de caja;
+    :Digita monto base de apertura en efectivo;
+    |Módulo Caja|
+    :Crea sesión de caja en estado ABIERTA;
+    |Cajero|
+endif
+
+|Cajero|
+if (¿Pedido es de tipo MESA?) then (Sí)
+    :Consulta si el cliente desea incluir propina voluntaria;
+    if (¿Acepta propina sugerida?) then (Sí)
+        :Aplica propina sugerida (10% base redondeado abajo a centena);
+    else (No)
+        :Mantiene propina en 0;
+    endif
+else (Llevar)
+    :Propina fija en 0;
+endif
+
+:Selecciona método de pago (Efectivo / Tarjeta / Transferencia);
+if (¿Método es EFECTIVO?) then (Sí)
+    :Digita efectivo entregado por el cliente;
+    |Módulo Caja|
+    :Calcula cambio = recibido - (total + propina);
+    |Cajero|
+    :Entrega vueltas en efectivo al cliente;
+endif
+
+:Presiona "Confirmar Cobro";
+
+|Módulo Caja|
+:Inicia Transacción Atómica de Cobro;
+:Invoca PedidosService.prepararCobro(tx);
+|Módulo Pedidos|
+:Verifica estado del pedido y bloquea;
+|Módulo Caja|
+:Genera recibo con número de secuencia global R-XXXXXX;
+:Registra línea de pago asociada al recibo;
+:Invoca PedidosService.cerrar(tx);
+|Módulo Pedidos|
+:Cambia estado de pedido a CERRADO y libera mesa;
+|Módulo Caja|
+:Inserta evento PedidoCobrado en outbox;
+:Ejecuta COMMIT de la transacción;
+
+|Cajero|
+:Se abre vista de impresión de recibo térmico 80 mm;
+:Imprime comprobante de venta POS no fiscal;
+
+:Operación regular y ventas sucesivas durante la jornada de trabajo;
+
+|Cajero|
+:Al finalizar la jornada, ingresa a módulo Caja -> Cerrar Turno;
+:Cuenta físicamente el dinero en gaveta;
+:Digita el efectivo contado en la interfaz;
+
+|Módulo Caja|
+:Calcula efectivo_esperado = apertura + ventasEfectivo + ingresos - retiros;
+:Calcula diferencia = efectivoContado - efectivoEsperado;
+:Actualiza sesion_caja con estado CERRADA y cerrada_at;
+:Registra evento SesionCajaCerrada en outbox;
+
+|Cajero|
+:Visualiza balance de cierre y arqueo (sobrante / faltante);
+:Imprime reporte de arqueo de caja;
+stop
+
+@enduml

@@ -1,0 +1,73 @@
+@startuml paquetes
+!pragma layout smetana
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam roundCorner 8
+skinparam defaultFontSize 11
+
+title Diagrama de Paquetes y Fronteras Modulares
+
+package "Frontend (apps/web - SPA React 19)" as WebSPA {
+    [features/pos] as F_POS
+    [features/cocina] as F_KDS
+    [features/caja] as F_Caja
+    [features/admin] as F_Admin
+}
+
+package "Núcleo Compartido (packages/shared)" as PkgShared {
+    [money.ts\n(Enteros COP)] as M_Money
+    [enums.ts\n(Enums Dominio)] as M_Enums
+    [schemas/*\n(Esquemas Zod)] as M_Schemas
+    [fecha-operativa.ts] as M_Fecha
+}
+
+package "Backend (apps/api - NestJS 12)" as ApiNest {
+    
+    package "Módulos de Operación" as OpsMods {
+        [pedidos\n(pedidos.public.ts)] as ModPed
+        [cocina\n(cocina.public.ts)] as ModCoc
+        [caja\n(caja.public.ts)] as ModCaj
+    }
+
+    package "Módulos de Catálogo e Insumos" as CatMods {
+        [catalogo\n(catalogo.public.ts)] as ModCat
+        [inventario\n(inventario.public.ts)] as ModInv
+        [clientes\n(clientes.public.ts)] as ModCli
+    }
+
+    package "Módulos Transversales" as CrossMods {
+        [identidad\n(identidad.public.ts)] as ModId
+        [realtime\n(SSE Hub)] as ModRT
+        [administracion\n(KPIs & Audit)] as ModAdm
+    }
+
+    package "shared-kernel" as Kernel {
+        [db (Drizzle & Pool)] as K_Db
+        [event-bus (Bus Tx)] as K_Bus
+        [outbox (Dispatcher)] as K_Outbox
+    }
+}
+
+WebSPA ..> PkgShared : tipos y contratos
+ApiNest ..> PkgShared : validaciones Zod
+
+' Dependencias estrictas vía *.public.ts
+ModPed ..> ModInv : consumir stock (tx)
+ModPed ..> ModCoc : crear comanda (tx)
+ModPed ..> ModCat : consulta precios
+ModCaj ..> ModPed : prepararCobro y cerrar (tx)
+ModInv ..> ModCat : resuelve recetas
+
+' Kernel y Outbox
+ApiNest ..> Kernel : usa DB y EventBus
+K_Outbox ..> ModRT : notifica post-commit
+ModRT ..> WebSPA : Server-Sent Events
+
+note bottom of ApiNest
+  <b>Regla Arquitectónica:</b>
+  Comunicación inter-modular restringida exclusivamente a
+  interfaces públicas <i>*.public.ts</i> o <i>EventBus</i> transaccional.
+  Verificado por <i>dependency-cruiser</i> (0 violaciones).
+end note
+
+@enduml

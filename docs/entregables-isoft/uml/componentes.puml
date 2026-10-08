@@ -1,0 +1,80 @@
+@startuml componentes
+!pragma layout smetana
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam defaultFontSize 11
+
+title Diagrama de Componentes - MonsterBurguer POS
+
+package "Cliente Web (Navegador SPA)" {
+    [React 19 SPA] as SPA
+    [TanStack Query] as ReactQuery
+    [EventSource Client (SSE)] as SSEClient
+    SPA *-- ReactQuery
+    SPA *-- SSEClient
+}
+
+package "Servidor Local (Docker Compose)" {
+
+    component "Nginx Reverse Proxy (Puerto 80)" as NginxProxy
+
+    package "Backend NestJS (Node.js 24)" as NestBackend {
+        [Seguridad & Guards\n(Helmet, Throttler, OrigenGuard)] as SecLayer
+        
+        package "Servicios de Negocio" {
+            [Módulo Identidad] as M_Id
+            [Módulo Pedidos] as M_Ped
+            [Módulo Cocina] as M_Coc
+            [Módulo Inventario] as M_Inv
+            [Módulo Caja] as M_Caj
+            [Módulo Catálogo] as M_Cat
+            [Módulo Administración] as M_Adm
+        }
+        
+        [Realtime SSE Hub] as M_RT
+        [Transactional EventBus] as EvBus
+        [OutboxDispatcher] as OutboxDisp
+        [Drizzle ORM DAL] as DrizzleDAL
+    }
+
+    database "PostgreSQL 18 (Puerto 5432)" as PostgresDB {
+        folder "Tablas Relacionales" as RelTables
+        [evento_sistema (Outbox)] as OutboxTable
+        folder "Vistas v_*" as Views
+    }
+}
+
+SPA --> NginxProxy : HTTP REST / Static
+SSEClient --> NginxProxy : GET /api/v1/stream
+NginxProxy --> SecLayer : Proxy Pass
+
+SecLayer --> M_Id
+SecLayer --> M_Ped
+SecLayer --> M_Coc
+SecLayer --> M_Inv
+SecLayer --> M_Caj
+SecLayer --> M_Cat
+SecLayer --> M_Adm
+
+M_Ped --> EvBus : publicarEnTx(tx)
+M_Coc --> EvBus : publicarEnTx(tx)
+M_Inv --> EvBus : publicarEnTx(tx)
+M_Caj --> EvBus : publicarEnTx(tx)
+
+M_Ped --> DrizzleDAL
+M_Coc --> DrizzleDAL
+M_Inv --> DrizzleDAL
+M_Caj --> DrizzleDAL
+M_Cat --> DrizzleDAL
+M_Adm --> DrizzleDAL
+EvBus --> DrizzleDAL
+
+DrizzleDAL --> RelTables : SQL Pool
+DrizzleDAL --> OutboxTable
+DrizzleDAL --> Views
+
+OutboxTable --> OutboxDisp : LISTEN / NOTIFY
+OutboxDisp --> M_RT : post-commit
+M_RT --> SSEClient : text/event-stream
+
+@enduml

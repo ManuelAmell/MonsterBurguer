@@ -1,0 +1,73 @@
+@startuml despliegue
+!pragma layout smetana
+skinparam node {
+    BackgroundColor White
+    BorderColor Black
+}
+skinparam shadowing false
+
+title Diagrama de Despliegue Físico en Red de Área Local (LAN) - MonsterBurguer
+
+node "Terminal de Mostrador (Caja / POS)" as TermMostrador {
+    artifact "Navegador Web (Chrome/Edge)" as NavMostrador {
+        component "MonsterBurguer SPA\n(Rutas /pos y /caja)" as SPAMostrador
+    }
+}
+
+node "Periférico de Impresión" as PerifImpresion {
+    component "Impresora Térmica 80 mm\n(Recibos POS)" as Impresora
+}
+
+node "Pantalla de Cocina (KDS)" as TermCocina {
+    artifact "Smart TV / Monitor 22\" con Navegador" as NavCocina {
+        component "MonsterBurguer SPA\n(Ruta /cocina)" as SPACocina
+    }
+}
+
+node "Estación de Administración" as TermAdmin {
+    artifact "PC Administrador (Navegador)" as NavAdmin {
+        component "MonsterBurguer SPA\n(Ruta /admin)" as SPAAdmin
+    }
+}
+
+node "Servidor Local del Restaurante (Mini-PC / Host Local)" as ServidorLocal {
+    node "Docker Engine / Docker Compose" as DockerHost {
+        node "Contenedor: monsterburguer-nginx" as ContNginx {
+            component "Nginx Reverse Proxy\n(Puerto 80)" as SrvNginx
+            folder "Archivos Estáticos SPA (/usr/share/nginx/html)" as StaticDist
+        }
+        
+        node "Contenedor: monsterburguer-api" as ContApi {
+            component "API NestJS 12 (Node.js 24)\n(Puerto 3000)" as SrvApi
+        }
+        
+        node "Contenedor: monsterburguer-postgres" as ContPg {
+            database "PostgreSQL 18\n(Puerto 5432)" as SrvDb
+        }
+        
+        storage "Volumen Persistente: pgdata" as VolPg
+    }
+}
+
+cloud "Red de Área Local (LAN Restaurante - 192.168.1.0/24)" as LAN
+
+TermMostrador -- LAN : HTTP / SSE (Wi-Fi / Ethernet)
+TermCocina -- LAN : HTTP / SSE (Wi-Fi / Ethernet)
+TermAdmin -- LAN : HTTP / SSE (Wi-Fi / Ethernet)
+LAN -- SrvNginx : Puerto 80
+
+TermMostrador ..> Impresora : USB / Diálogo de Impresión OS
+
+SrvNginx --> StaticDist : Sirve HTML, JS, CSS
+SrvNginx --> SrvApi : Proxy Pass /api/v1/*
+SrvApi --> SrvDb : Conexión TCP/IP SQL (Drizzle ORM)
+SrvDb --> VolPg : Almacenamiento seguro en disco
+
+note bottom of ServidorLocal
+  <b>Operación Autónoma en LAN:</b>
+  El sistema opera completamente dentro de la red local
+  del restaurante sin requerir conexión continua a internet.
+  Las terminales acceden mediante la IP local o nombre de host.
+end note
+
+@enduml

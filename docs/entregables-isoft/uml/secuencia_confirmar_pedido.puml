@@ -1,0 +1,86 @@
+@startuml secuencia_confirmar_pedido
+!pragma layout smetana
+skinparam shadowing false
+autonumber
+
+actor "Cajero" as Cajero
+participant "Web POS\n(React SPA)" as POS
+participant "PedidosController" as PedCtrl
+participant "PedidosService" as PedSrv
+participant "InventarioPublicService" as InvPub
+participant "InventarioService" as InvSrv
+participant "CocinaPublicService" as CocPub
+participant "CocinaService" as CocSrv
+participant "EventBus" as Bus
+database "PostgreSQL\n(Drizzle ORM)" as DB
+participant "OutboxDispatcher" as Outbox
+participant "RealtimeService\n(SSE)" as RT
+participant "Web KDS\n(Cocina)" as KDS
+
+Cajero -> POS: Presiona "Enviar a cocina"
+POS -> PedCtrl: POST /api/v1/pedidos/{id}/confirmar
+PedCtrl -> PedSrv: confirmarBloqueado(id, usuarioId)
+
+activate PedSrv
+PedSrv -> DB: BEGIN Transaction (tx)
+PedSrv -> DB: SELECT * FROM pedido WHERE id = :id FOR UPDATE
+PedSrv -> DB: SELECT * FROM pedido_item WHERE pedido_id = :id
+
+note over PedSrv,InvSrv: Invocación modular con paso de transacción tx activa
+PedSrv -> InvPub: consumir(tx, items, usuarioId, pedidoId)
+InvPub -> InvSrv: consumir(tx, items, usuarioId, pedidoId)
+
+activate InvSrv
+InvSrv -> DB: SELECT * FROM ingrediente WHERE id IN (...) ORDER BY id ASC FOR UPDATE
+note right: Bloqueo ordenado previene interbloqueos (deadlocks)
+
+alt Stock insuficiente
+    InvSrv --> PedSrv: throw DomainError(409, "STOCK_INSUFICIENTE", faltantes)
+    PedSrv -> DB: ROLLBACK Transaction
+    PedSrv --> PedCtrl: Error 409
+    PedCtrl --> POS: HTTP 409 { codigo: "STOCK_INSUFICIENTE", faltantes: [...] }
+    POS --> Cajero: Muestra modal con detalle de ingredientes agotados
+else Stock suficiente
+    InvSrv -> DB: UPDATE ingrediente SET stock_actual = stock_actual - :consumo
+    InvSrv -> DB: INSERT INTO movimiento_inventario (CONSUMO)
+    opt Stock por debajo de stock_minimo
+        InvSrv -> Bus: publicarEnTx(tx, StockBajoMinimo)
+    end
+    InvSrv --> PedSrv: OK (stock descontado)
+end
+deactivate InvSrv
+
+PedSrv -> CocPub: crearComanda(tx, datosComanda)
+CocPub -> CocSrv: crearComanda(tx, datosComanda)
+activate CocSrv
+CocSrv -> DB: INSERT INTO comanda (estado: PENDIENTE)
+CocSrv -> DB: INSERT INTO comanda_item (...)
+CocSrv --> PedSrv: comandaId
+deactivate CocSrv
+
+PedSrv -> DB: UPDATE pedido SET estado = 'CONFIRMADO', confirmado_at = now()
+PedSrv -> Bus: publicarEnTx(tx, PedidoConfirmado)
+Bus -> DB: INSERT INTO evento_sistema (tipo: 'PedidoConfirmado', payload)
+Bus -> DB: SELECT pg_notify('evento_sistema', evento_id)
+
+PedSrv -> DB: COMMIT Transaction
+deactivate PedSrv
+
+PedSrv --> PedCtrl: ResultadoConfirmacion { pedidoId, comandaId, numeroDia }
+PedCtrl --> POS: HTTP 200 { ok: true, numeroDia: 14 }
+POS --> Cajero: Actualiza ticket a "Confirmado" (solo lectura)
+
+== Notificación en Tiempo Real (Post-Commit) ==
+
+DB -->> Outbox: NOTIFY evento_sistema
+activate Outbox
+Outbox -> DB: SELECT * FROM evento_sistema WHERE procesado_at IS NULL FOR UPDATE SKIP LOCKED
+Outbox -> Bus: ejecutarHandlersDespuesDeCommit(evento)
+Bus -> RT: notificar(PedidoConfirmado)
+Outbox -> DB: UPDATE evento_sistema SET procesado_at = now()
+deactivate Outbox
+
+RT -> KDS: EventSource dispatch ("comanda.nueva", payload)
+KDS --> KDS: Renderiza tarjeta #014 en columna PENDIENTE y emite sonido
+
+@enduml

@@ -1,0 +1,84 @@
+@startuml cu_general
+!pragma layout smetana
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam roundCorner 8
+skinparam defaultFontSize 12
+
+actor "Cajero" as Cajero
+actor "Personal de Cocina" as Cocinero
+actor "Administrador" as Admin
+
+rectangle "Sistema MonsterBurguer POS" {
+
+    package "Seguridad e Identidad" {
+        usecase "CU-01: Iniciar Sesión" as CU01
+        usecase "CU-02: Gestionar Usuarios" as CU02
+    }
+
+    package "Ventas y Pedidos (POS)" {
+        usecase "CU-03: Crear Pedido" as CU03
+        usecase "CU-04: Agregar Ítems y Nota" as CU04
+        usecase "CU-05: Enviar a Cocina" as CU05
+        usecase "CU-06: Consultar Pedidos Activos" as CU06
+    }
+
+    package "Cocina (KDS)" {
+        usecase "CU-07: Preparar Comanda" as CU07
+    }
+
+    package "Caja y Cobro" {
+        usecase "CU-08: Abrir Sesión de Caja" as CU08
+        usecase "CU-09: Cobrar Pedido y Emitir Recibo" as CU09
+        usecase "CU-10: Registrar Movimiento de Caja" as CU10
+        usecase "CU-11: Cerrar Sesión de Caja" as CU11
+    }
+
+    package "Catálogo e Inventario" {
+        usecase "CU-12: Gestionar Productos y Menú" as CU12
+        usecase "CU-13: Gestionar Recetas y Disponibilidad" as CU13
+        usecase "CU-14: Registrar Entrada de Mercancía" as CU14
+        usecase "CU-15: Registrar Ajuste o Merma" as CU15
+        usecase "CU-16: Consultar Kardex de Inventario" as CU16
+    }
+
+    package "Administración y Auditoría" {
+        usecase "CU-17: Consultar Dashboard y KPIs" as CU17
+        usecase "CU-18: Consultar Bitácora y Auditoría" as CU18
+    }
+
+    CU05 ..> CU04 : <<include>>
+}
+
+' Asociaciones del Cajero
+Cajero --> CU01
+Cajero --> CU03
+Cajero --> CU04
+Cajero --> CU05
+Cajero --> CU06
+Cajero --> CU08
+Cajero --> CU09
+Cajero --> CU10
+Cajero --> CU11
+
+' Asociaciones de Cocina
+Cocinero --> CU01
+Cocinero --> CU07
+
+' Asociaciones del Administrador
+Admin --> CU01
+Admin --> CU02
+Admin --> CU08
+Admin --> CU09
+Admin --> CU10
+Admin --> CU11
+Admin --> CU12
+Admin --> CU13
+Admin --> CU14
+Admin --> CU15
+Admin --> CU16
+Admin --> CU17
+Admin --> CU18
+
+@enduml
