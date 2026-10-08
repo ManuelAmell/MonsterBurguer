@@ -163,6 +163,36 @@ describe('schemas/caja', () => {
       ).toThrow('Solo se permite un único pago en EFECTIVO por cobro (RN-43)');
     });
 
+    it('RN-42: rechaza cobro con métodos repetidos no en efectivo', () => {
+      expect(() =>
+        cobroSchema.parse({
+          pedidoId: ID_PEDIDO,
+          pedidoVersion: 1,
+          propina: 0,
+          pagos: [
+            { metodo: 'TARJETA', monto: 20000 },
+            { metodo: 'TARJETA', monto: 10000 },
+          ],
+        }),
+      ).toThrow('No se permiten métodos de pago repetidos (RN-42)');
+    });
+
+    it('RN-42: rechaza cobro con más de 3 pagos', () => {
+      expect(() =>
+        cobroSchema.parse({
+          pedidoId: ID_PEDIDO,
+          pedidoVersion: 1,
+          propina: 0,
+          pagos: [
+            { metodo: 'EFECTIVO', monto: 10000, recibido: 10000 },
+            { metodo: 'TARJETA', monto: 10000 },
+            { metodo: 'TRANSFERENCIA', monto: 10000 },
+            { metodo: 'TARJETA', monto: 5000 },
+          ],
+        }),
+      ).toThrow('Se permite un máximo de 3 pagos por cobro (RN-42)');
+    });
+
     it('RN-43: rechaza pago en EFECTIVO donde recibido < monto', () => {
       expect(() =>
         pagoCobroItemSchema.parse({

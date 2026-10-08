@@ -41,6 +41,7 @@ export const itemReporteVentasSchema = z.object({
   propinas: pesosSchema,
   ticketPromedio: pesosSchema,
   unidades: z.number().int().nonnegative().optional(),
+  cobrado: pesosSchema.optional(),
 });
 export type ItemReporteVentas = z.infer<typeof itemReporteVentasSchema>;
 
@@ -50,6 +51,7 @@ export const totalesReporteVentasSchema = z.object({
   propinas: pesosSchema,
   ticketPromedio: pesosSchema,
   unidades: z.number().int().nonnegative().optional(),
+  cobrado: pesosSchema.optional(),
   anulados: z.object({
     cantidad: z.number().int().nonnegative(),
     monto: pesosSchema,

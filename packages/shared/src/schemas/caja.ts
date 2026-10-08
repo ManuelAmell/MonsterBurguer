@@ -95,7 +95,8 @@ export const cobroSchema = z
     propina: pesosSchema.default(0),
     pagos: z
       .array(pagoCobroItemSchema)
-      .min(1, 'Debe registrar al menos un pago para cobrar el pedido (RN-42)'),
+      .min(1, 'Debe registrar al menos un pago para cobrar el pedido (RN-42)')
+      .max(3, 'Se permite un máximo de 3 pagos por cobro (RN-42)'),
   })
   .refine(
     (data) => {
@@ -104,6 +105,16 @@ export const cobroSchema = z
     },
     {
       message: 'Solo se permite un único pago en EFECTIVO por cobro (RN-43)',
+      path: ['pagos'],
+    },
+  )
+  .refine(
+    (data) => {
+      const metodos = data.pagos.map((p) => p.metodo);
+      return new Set(metodos).size === metodos.length;
+    },
+    {
+      message: 'No se permiten métodos de pago repetidos (RN-42)',
       path: ['pagos'],
     },
   );
