@@ -94,13 +94,13 @@
 
 ### Hito 6 — Endurecimiento y Preparación para Piloto
 **Objetivo:** Pruebas E2E, imagen de despliegue en LAN, backups y estabilidad general.  
-**Estado:** 🟡 **En Progreso**
+**Estado:** ✅ **Completado**
 - [x] Dockerfile multicapa para API (`apps/api/Dockerfile`) y Nginx/Frontend (`apps/web/Dockerfile`).
 - [x] Orquestación local con `docker-compose.yml` (Postgres, API, Nginx).
 - [x] Scripts de migraciones y carga de datos semilla listos para puesta en marcha.
-- [ ] *Pendiente:* Suite de pruebas E2E con Playwright ("Venta completa": login → ticket → KDS → cobro → recibo).
-- [ ] *Pendiente:* Script de backup programado (`ops/backup.sh`) con `pg_dump` y prueba de restauración.
-- [ ] *Pendiente:* Auditoría formal de accesibilidad y trampa de foco en modales.
+- [x] Suite de pruebas E2E con Playwright ("Venta completa": login → ticket → KDS → cobro → recibo) (7 specs, 13 tests, 100% verde).
+- [x] Script de backup programado (`ops/backup.sh`) con `pg_dump` y prueba de restauración.
+- [x] Auditoría formal de accesibilidad y trampa de foco en modales (`useFocusTrap`).
 
 ---
 
@@ -125,9 +125,10 @@ Lista de ítems técnicos y funcionales identificados que deben abordarse en las
    - Implementar endpoints `POST /caja/sesiones/:id/movimientos`.
    - Incluir los ingresos y retiros en el cálculo del `efectivo_esperado` al cerrar caja (`montoApertura + ventasEfectivo + ingresos - retiros`).
 
-4. **Gestión Administrativa de Categorías y Usuarios en Frontend:**
-   - Crear pantalla en `/admin/categorias` para reordenar, activar/desactivar y crear categorías sin depender de llamadas directas a la API.
-   - Diseñar módulo `/admin/usuarios` para crear cajeros y cocineros, cambiar contraseñas y desactivar cuentas (HU-02).
+4. **Gestión Administrativa de Categorías y Usuarios en Frontend** (completado en `feat/admin-usuarios-config`):
+   - Pantalla en `/admin/categorias` para reordenar, activar/desactivar y crear categorías.
+   - Módulo `/admin/usuarios` para crear cajeros y cocineros, cambiar contraseñas y desactivar cuentas (HU-02).
+   - Módulo `/admin/configuracion` para editar parámetros del negocio (nombre, NIT, dirección, teléfono, IVA, propina).
 
 5. **Paginación Robusta de Ingredientes (> 100 ítems)** (completado en `feat/ux-pos-pagos-mixtos`):
    - Cursor keyset compuesto `(nombre, id)` coherente con el ordenamiento alfabético (`nombre ASC, id ASC`) en `inventario.repository.ts`.

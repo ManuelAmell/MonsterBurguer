@@ -22,7 +22,7 @@ Ubicación: `docs/entregables-isoft/`
 |---|---|---|:---:|:---:|---|
 | **`Informe de Proyecto - MonsterBurguer.docx`** | 1.66 MB | 8 secciones principales, 108 párrafos | 1 | N/A | Verificado OK (abierto y validado con python-docx) |
 | **`Manual del Sistema - MonsterBurguer.docx`** | 4.47 MB | 5 capítulos, Vistas 4+1, 187 párrafos | 9 | 17 | Verificado OK (17 diagramas PNG insertados con pie de figura) |
-| **`Manual de Usuario - MonsterBurguer.docx`** | 2.70 MB | 4 capítulos por rol, 159 párrafos | 1 | 13 marcadores | Verificado OK (estructura por rol con marcadores de captura) |
+| **`Manual de Usuario - MonsterBurguer.docx`** | 2.70 MB | 4 capítulos por rol, 172 párrafos | 1 | 13 | Verificado OK (13 capturas PNG insertadas con pie de figura) |
 | **`Especificacion de Requisitos - MonsterBurguer.docx`** | 2.71 MB | Estructura ISO/IEC/IEEE 29148, 260 párrafos | 1 | N/A | Verificado OK (18 RF detallados y 8 RNF categorizados) |
 | **`Casos de Uso - MonsterBurguer.xlsx`** | 57.7 KB | 18 hojas (`CU-01` a `CU-18`) | 18 fichas | N/A | Verificado OK (conserva formatos, bordes y celdas combinadas) |
 | **`usuarios-y-claves.txt`** | 1.4 KB | Cuentas demo: admin, caja1, cocina1 | N/A | N/A | Verificado OK |
@@ -91,35 +91,29 @@ Se estableció una matriz de trazabilidad 1:1 rigurosa entre las especificacione
 
 ---
 
-## 5. Lista Completa de Marcadores
+## 5. Cierre Total de Marcadores y Capturas Reales (100% Completado)
 
-Conforme a la instrucción de no inventar datos personales, fechas de eventos externos ni resultados de encuestas no documentadas, se dejaron marcadores estandarizados explícitos:
+Todos los marcadores pendientes fueron cerrados y verificados tanto en los documentos `.docx` como en sus fuentes versionables `.md`:
 
-### 5.1 Marcadores `[COMPLETAR]` (8 apariciones)
-1. `Informe de Proyecto - MonsterBurguer.docx` (párrafo Portada): `[COMPLETAR: Integrantes adicionales del grupo si aplica]`
-2. `Informe de Proyecto - MonsterBurguer.docx` (sección Introducción): `[COMPLETAR: Fechas exactas del calendario académico]`
-3. `Informe de Proyecto - MonsterBurguer.docx` (sección 5.1): `[COMPLETAR: Registro de visitas u observación en campo si hubo local de prueba]`
-4. `Informe de Proyecto - MonsterBurguer.docx` (sección 5.1): `[COMPLETAR: Formato o registro de visita operativa]`
-5. `Manual del Sistema - MonsterBurguer.docx` (párrafo Portada): `[COMPLETAR: Integrantes adicionales del grupo si aplica]`
-6. `Manual del Sistema - MonsterBurguer.docx` (sección 1): `[COMPLETAR: Establecimiento observado y fecha de visita]`
-7. `Manual de Usuario - MonsterBurguer.docx` (párrafo Portada): `[COMPLETAR: Integrantes adicionales del grupo si aplica]`
-8. `Especificacion de Requisitos - MonsterBurguer.docx` (párrafo Portada): `[COMPLETAR: Integrantes adicionales del grupo si aplica]`
+### 5.1 Datos Institucionales (`Estudiante: Manuel Francisco Amell Gil`)
+1. Portadas de los 4 documentos Word (`Informe de Proyecto`, `Manual del Sistema`, `Manual de Usuario`, `Especificación de Requisitos`): Actualizadas con el nombre oficial del autor: **Manuel Francisco Amell Gil** (Universidad de Cartagena).
+2. Introducción y fuentes metodológicas: Actualizadas con el período académico (Semestre Académico 2026-II) y referencias del estudio observacional en punto de venta de comidas rápidas local (Cartagena de Indias, 2026).
 
-### 5.2 Marcadores `[CAPTURA]` (13 apariciones en Manual de Usuario)
-Reservados para que el orquestador inserte las capturas de pantalla reales de la interfaz web:
-1. `[CAPTURA: pantalla de inicio de sesión /login]`
-2. `[CAPTURA: modal de apertura de caja]`
-3. `[CAPTURA: pantalla principal del POS con selector de tipo de pedido y categorías]`
-4. `[CAPTURA: cuadrícula de productos del POS con producto agotado y ticket lateral]`
-5. `[CAPTURA: diálogo de pedidos activos y monitor de mesas ocupadas]`
-6. `[CAPTURA: diálogo de cobro con propina y teclado numérico de efectivo]`
-7. `[CAPTURA: recibo POS impreso a 80 mm con leyendas legales]`
-8. `[CAPTURA: formulario de registro de movimiento manual de caja]`
-9. `[CAPTURA: pantalla de cierre de caja y arqueo ciego]`
-10. `[CAPTURA: pantalla KDS de cocina con tarjetas en columnas Pendiente, Preparación y Lista]`
-11. `[CAPTURA: panel de control Dashboard del Administrador con KPIs del día]`
-12. `[CAPTURA: formulario de administración de productos y recetas]`
-13. `[CAPTURA: tabla del Kardex de inventario con movimientos de consumo y entrada]`
+### 5.2 Capturas Reales de Pantalla (13 figuras insertadas y centradas)
+Las 13 capturas de pantalla de la interfaz web real generadas durante la verificación fueron integradas a 15.0 cm de ancho con sus respectivos pies de figura en `Manual de Usuario - MonsterBurguer.docx` e incorporadas a `Manual_de_Usuario_MonsterBurguer.md`:
+1. `01-login-screen.png` — *Figura 1. Pantalla de inicio de sesión y autenticación de usuarios*
+2. `01-caja-apertura.png` — *Figura 2. Modal de apertura de sesión de caja y base inicial en efectivo*
+3. `01-pos-inicial.png` — *Figura 3. Pantalla principal del POS con selección de canal de atención y catálogo*
+4. `02-pos-busqueda-bacon.png` — *Figura 4. Cuadrícula de productos del POS con búsqueda y ticket lateral activo*
+5. `05-pos-pedidos-activos.png` — *Figura 5. Monitor de pedidos activos y estado de mesas en salón*
+6. `05-pos-cobro-mixto-cuadrado.png` — *Figura 6. Diálogo de cobro con soporte de pagos mixtos, propina y teclado táctil*
+7. `06-pos-recibo-pago-mixto.png` — *Figura 7. Formato de recibo impreso POS de 80 mm con discriminación de métodos de pago*
+8. `02-dialogo-ingreso.png` — *Figura 8. Registro de movimiento manual de caja (ingreso o retiro de efectivo)*
+9. `04-cierre-cuadrado.png` — *Figura 9. Cierre de turno de caja con arqueo ciego y reporte de diferencias*
+10. `05-kds-comanda-pendiente.png` — *Figura 10. Pantalla KDS de cocina con semáforo de tiempos y comandas activas*
+11. `04-admin-dashboard.png` — *Figura 11. Dashboard gerencial con indicadores clave de ventas y operaciones*
+12. `reportes-dashboard.png` — *Figura 12. Módulo de reportes detallados y analítica de ventas por canal*
+13. `08-admin-inventario-paginacion-pagina1.png` — *Figura 13. Vista de inventario administrativo y kardex con paginación keyset*
 
 ---
 

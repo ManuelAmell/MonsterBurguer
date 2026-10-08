@@ -7,7 +7,7 @@
 **Departamento de Ingeniería de Software**  
 **Asignatura:** Ingeniería de Software  
 **Docente:** Ing. Martín Monroy Ríos, MSc, PhD  
-**Estudiante:** [COMPLETAR: nombre completo del estudiante] [COMPLETAR: Integrantes adicionales del grupo si aplica]  
+**Estudiante:** Manuel Francisco Amell Gil  
 **Fecha:** Octubre de 2026  
 
 ---

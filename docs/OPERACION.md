@@ -138,40 +138,91 @@ apps/api/drizzle/
 
 ## 5. Estrategia de Respaldos (Backups) y Restauración
 
-La base de datos contiene todo el historial de pedidos, recibos de caja, auditoría de eventos y stock físico. Debe respaldarse diariamente al terminar el turno operativo.
+La base de datos contiene todo el historial de pedidos, recibos de caja, auditoría de eventos y stock físico. Debe respaldarse diariamente al terminar el turno operativo. Para este propósito, el sistema incluye el script de automatización [`ops/backup.sh`](file:///C:/Users/manue/Documents/PersonalProjects/MonsterBurguer/ops/backup.sh).
 
-### 5.1. Generar Respaldo Manual con `pg_dump`
-Desde el host que ejecuta Docker Compose:
+### 5.1. Script Automatizado `ops/backup.sh`
+
+El script centraliza las mejores prácticas operacionales de PostgreSQL para MonsterBurguer:
+- **Formato custom comprimido (`pg_dump -F c -b`):** Genera volcados binarios con compresión zlib/gzip integrada y soporte para objetos binarios (BLOBs), optimizando espacio y velocidad de I/O.
+- **Detección transparente del entorno:** Detecta si el servicio Docker Compose `postgres` está activo y realiza el respaldo mediante `docker compose exec -T`. Si no hay Docker en ejecución, invoca de forma transparente el cliente nativo `pg_dump` contra el host/puerto configurado.
+- **Rotación y retención de 30 días:** Pasa revista automática sobre el directorio de respaldos y elimina archivos con antigüedad mayor a 30 días (`find ... -mtime +30 -delete`).
+- **Verificación de restauración en base temporal (`--verify`):** Permite certificar la integridad del archivo dump creando una base temporal `mb_verify_<timestamp>`, probando la restauración con `pg_restore --clean --if-exists`, y limpiándola al finalizar.
+
+#### Variables de entorno soportadas
+
+| Variable | Por defecto | Descripción |
+|---|---|---|
+| `BACKUP_DIR` | `backups` | Directorio local donde se almacenan los archivos `.dump`. |
+| `POSTGRES_USER` | `mb` | Usuario de PostgreSQL con permisos sobre la base de datos. |
+| `POSTGRES_DB` | `monsterburguer` | Nombre de la base de datos a respaldar. |
+| `POSTGRES_HOST` | `localhost` | Host de conexión (utilizado si Docker no está activo o en verificación). |
+| `POSTGRES_PORT` | `5432` | Puerto TCP de PostgreSQL. |
+| `POSTGRES_PASSWORD` | `mb_dev_pass` | Contraseña utilizada para pruebas de verificación con `createdb` / `dropdb`. |
+
+### 5.2. Modos de Uso del Script
+
+#### Generación de respaldo estándar
+Ejecuta el volcado con formato custom comprimido y aplica la retención de 30 días:
 
 ```bash
-# Crear directorio de backups
-mkdir -p backups
+# Dar permisos de ejecución si es la primera vez
+chmod +x ops/backup.sh
 
-# Ejecutar volcado en formato custom comprimido
-docker compose exec postgres pg_dump -U mb -d monsterburguer -F c -b -v > backups/mb_backup_$(date +%Y%m%d_%H%M%S).dump
+# Ejecutar respaldo
+./ops/backup.sh
 ```
 
-### 5.2. Automatización con Cron (Linux)
-Agregar una tarea en el crontab del sistema (`crontab -e`) para respaldar automáticamente a las 05:00 AM (corte de fecha operativa):
+Salida esperada:
+```text
+==> [2026-10-08 23:00:00] Iniciando respaldo de 'monsterburguer'...
+==> Respaldando mediante contenedor Docker Compose 'postgres'...
+==> Respaldo generado con éxito: backups/mb_backup_20261008_230000.dump (4.2M)
+==> Aplicando política de retención (30 días)...
+==> Operación de respaldo finalizada exitosamente.
+```
+
+#### Generación con prueba de restauración (`--verify`)
+Genera el respaldo y ejecuta una prueba de fuego restaurando el archivo en una base temporal aislada:
+
+```bash
+./ops/backup.sh --verify
+```
+
+Salida esperada adicional:
+```text
+==> [VERIFICACIÓN] Creando base temporal de prueba 'mb_verify_20261008_230000'...
+==> [VERIFICACIÓN] Restaurando volcado en base temporal...
+==> [VERIFICACIÓN] Limpiando base temporal...
+==> [VERIFICACIÓN] ¡Prueba de restauración completada con éxito!
+==> Operación de respaldo finalizada exitosamente.
+```
+
+### 5.3. Automatización con Cron (Linux)
+Agregar una tarea en el crontab del sistema operativo (`crontab -e`) para respaldar automáticamente a las 05:00 AM (corte de fecha operativa del restaurante) y una verificación completa semanal los domingos:
 
 ```cron
-0 5 * * * cd /opt/MonsterBurguer && docker compose exec -T postgres pg_dump -U mb -d monsterburguer -F c > /opt/MonsterBurguer/backups/mb_$(date +\%Y\%m\%d).dump
-# Retención: eliminar respaldos con más de 30 días
-0 6 * * * find /opt/MonsterBurguer/backups/ -type f -name "*.dump" -mtime +30 -delete
+# Respaldo diario a las 05:00 AM con rotación automática
+0 5 * * * cd /opt/MonsterBurguer && ./ops/backup.sh >> /var/log/mb_backup.log 2>&1
+
+# Prueba de verificación de restauración semanal (domingos a las 04:00 AM)
+0 4 * * 0 cd /opt/MonsterBurguer && ./ops/backup.sh --verify >> /var/log/mb_backup_verify.log 2>&1
 ```
 
-### 5.3. Restauración de Base de Datos con `pg_restore`
-En caso de fallo de disco o desastre:
+### 5.4. Restauración de Base de Datos en Caso de Desastre (`pg_restore`)
+En caso de fallo de hardware o migración a un nuevo servidor:
 
 ```bash
-# 1. Detener contenedores de API para liberar conexiones
+# 1. Detener contenedores de la API para liberar conexiones activas
 docker compose stop api
 
-# 2. Restaurar el volcado sobre la base de datos limpia
-docker compose exec -T postgres pg_restore -U mb -d monsterburguer -v --clean --if-exists < backups/mb_backup_20261006.dump
+# 2. Restaurar el volcado sobre la base de datos limpia con pg_restore
+docker compose exec -T postgres pg_restore -U mb -d monsterburguer -v --clean --if-exists < backups/mb_backup_20261008_230000.dump
 
-# 3. Reiniciar la API
+# 3. Reiniciar el contenedor de la API
 docker compose start api
+
+# 4. Verificar salud del sistema
+curl -s http://localhost:3000/api/v1/health
 ```
 
 ---

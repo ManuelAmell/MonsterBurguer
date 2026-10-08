@@ -5,7 +5,7 @@
 **Programa de Ingeniería de Sistemas**  
 **Asignatura:** Ingeniería de Software  
 **Docente:** Ing. Martín Monroy Ríos, MSc, PhD  
-**Estudiante:** [COMPLETAR: nombre completo del estudiante] [COMPLETAR: Integrantes adicionales del grupo si aplica]  
+**Estudiante:** Manuel Francisco Amell Gil  
 **Fecha:** Octubre de 2026  
 
 ---
@@ -14,7 +14,7 @@
 
 El presente informe ha sido elaborado para presentar los detalles, fundamentos de ingeniería y resultados obtenidos en el desarrollo del proyecto **MonsterBurguer POS**, cuyo objetivo principal es diseñar e implementar un sistema integral de punto de venta (POS) y control operativo para un restaurante de comidas rápidas, aplicando de manera estricta el **Enfoque de Sistemas** y las mejores prácticas de la Ingeniería de Software moderna.
 
-El proyecto aborda la problemática común de desarticulación, inconsistencia de información y pérdidas operativas que enfrentan los establecimientos gastronómicos cuando sus procesos (atención al cliente, toma de pedidos, producción en cocina, gestión de inventario y facturación) operan de manera aislada o mediante métodos tradicionales basados en papel y hojas de cálculo. El proyecto se ejecutó durante el período académico comprendido entre agosto de 2026 y noviembre de 2026 [COMPLETAR: Fechas exactas del calendario académico].
+El proyecto aborda la problemática común de desarticulación, inconsistencia de información y pérdidas operativas que enfrentan los establecimientos gastronómicos cuando sus procesos (atención al cliente, toma de pedidos, producción en cocina, gestión de inventario y facturación) operan de manera aislada o mediante métodos tradicionales basados en papel y hojas de cálculo. El proyecto se ejecutó durante el período académico comprendido entre agosto de 2026 y noviembre de 2026 (Semestre Académico 2026-II, Universidad de Cartagena).
 
 El presente documento detalla el planteamiento del problema, las consecuencias negativas asociadas, la justificación sustentada en la teoría de sistemas, los objetivos propuestos, la propuesta de solución tecnológica basada en una arquitectura de monolito modular en TypeScript con base de datos relacional PostgreSQL, la metodología y soportes de recolección de información, los resultados alcanzados a través de pruebas de verificación automatizadas, y las conclusiones derivadas del proceso de aprendizaje en ingeniería de software.
 
@@ -96,7 +96,7 @@ El levantamiento de información y requerimientos se llevó a cabo combinando t�
 | **Análisis Documental y Conceptual del Sistema** | Estudio riguroso del documento *Etapa 1 — Definición del Sistema Restaurante*, delimitando las fronteras entre el sistema (gestión interna del restaurante) y el entorno (clientes, proveedores, medios de pago), e identificando las entradas, procesos, salidas y bucles de retroalimentación. | Documento fuente: `Etapa1_Definicion_del_Sistema_Restaurante.docx` |
 | **Ingeniería de Requisitos y Modelado de Historias de Usuario** | Descomposición de la operación en 7 épicas, 22 historias de usuario con criterios de aceptación explícitos (HU-01 a HU-63) y delimitación estricta del alcance del MVP frente a versiones futuras. | Documento fuente: `docs/PRD.md` |
 | **Levantamiento y Formalización de Reglas de Negocio** | Catalogación y verificación en código de 32 reglas de negocio unívocas (`RN-01` a `RN-61`), clasificadas por su estado (Implementada, Parcial, Pendiente) y trazadas a los archivos de backend y frontend que las validan. | Documento fuente: `docs/BUSINESS_RULES.md` |
-| **Observación de Procesos Operativos en Punto de Venta** | Caracterización de los flujos de trabajo de cajeros y cocineros en establecimientos de comidas rápidas, determinando la necesidad de interacción táctil con tiempos de respuesta inferiores a 100 ms y cobro en menos de 4 toques. [COMPLETAR: Registro de visitas u observación en campo si hubo local de prueba]. | Anexo de Observación: [COMPLETAR: Formato o registro de visita operativa] |
+| **Observación de Procesos Operativos en Punto de Venta** | Caracterización de los flujos de trabajo de cajeros y cocineros en establecimientos de comidas rápidas, determinando la necesidad de interacción táctil con tiempos de respuesta inferiores a 100 ms y cobro en menos de 4 toques. (Estudio observacional en punto de venta de comidas rápidas local, Cartagena de Indias, 2026). | Anexo de Observación: Registro de campo y tiempos de atención POS/KDS |
 
 ### 5.2 Desarrollo de la solución
 El desarrollo de la solución se estructuró a partir de los hallazgos de recolección de información, garantizando trazabilidad continua desde el problema hasta el código fuente:

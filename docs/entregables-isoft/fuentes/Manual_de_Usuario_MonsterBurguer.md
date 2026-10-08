@@ -5,7 +5,7 @@
 **Programa de Ingeniería de Sistemas**  
 **Asignatura:** Ingeniería de Software  
 **Docente:** Ing. Martín Monroy Ríos, MSc, PhD  
-**Estudiante:** [COMPLETAR: nombre completo del estudiante] [COMPLETAR: Integrantes adicionales del grupo si aplica]  
+**Estudiante:** Manuel Francisco Amell Gil  
 **Fecha:** Octubre de 2026  
 
 ---
@@ -67,7 +67,8 @@ Para acceder a cualquiera de los módulos del restaurante, el empleado debe iden
 |                    [ INICIAR SESIÓN ]                       |
 +-------------------------------------------------------------+
 ```
-[CAPTURA: pantalla de inicio de sesión /login]
+![Pantalla de inicio de sesión](../capturas/01-login-screen.png)
+*Figura 1. Pantalla de inicio de sesión y autenticación de usuarios*
 
 #### Pasos para Iniciar Sesión:
 1. Abra el navegador e ingrese a la dirección del sistema.
@@ -92,7 +93,8 @@ El rol de Cajero gestiona la apertura de turnos, la recepción de pedidos, el en
 #### 3.2.1 Apertura de Sesión de Caja (Inicio de Turno)
 Antes de registrar el primer cobro del día, el cajero debe establecer la base inicial en efectivo disponible en la gaveta para entregar cambio.
 
-[CAPTURA: modal de apertura de caja]
+![Apertura de caja](../capturas/01-caja-apertura.png)
+*Figura 2. Modal de apertura de sesión de caja y base inicial en efectivo*
 
 1. Al intentar cobrar un pedido o ingresar al menú lateral **Caja**, el sistema desplegará el formulario **"Apertura de Caja"**.
 2. Digite el valor en efectivo entregado como base (ejemplo: `$100.000`). Si inicia sin base, digite `$0`.
@@ -101,7 +103,8 @@ Antes de registrar el primer cobro del día, el cajero debe establecer la base i
 #### 3.2.2 Creación de Pedidos y Selección de Modalidad
 En la pantalla principal del POS (`/pos`), el cajero inicia cada orden indicando el canal de atención:
 
-[CAPTURA: pantalla principal del POS con selector de tipo de pedido y categorías]
+![Pantalla principal del POS](../capturas/01-pos-inicial.png)
+*Figura 3. Pantalla principal del POS con selección de canal de atención y catálogo*
 
 1. Seleccione la modalidad:
    - **Para Llevar:** Para órdenes que el cliente retira en el mostrador. No requiere asignar mesa.
@@ -112,7 +115,8 @@ En la pantalla principal del POS (`/pos`), el cajero inicia cada orden indicando
 #### 3.2.3 Armar el Ticket de Productos
 El menú se presenta dividido por categorías verticales (Hamburguesas, Papas, Bebidas, Postres) en el riel izquierdo, y una cuadrícula de productos en la zona central:
 
-[CAPTURA: cuadrícula de productos del POS con producto agotado y ticket lateral]
+![Búsqueda y catálogo](../capturas/02-pos-busqueda-bacon.png)
+*Figura 4. Cuadrícula de productos del POS con búsqueda y ticket lateral activo*
 
 1. **Agregar producto:** Toque la tarjeta del producto deseado. Se añadirá una unidad al ticket lateral derecho con su precio oficial en pesos colombianos (COP).
 2. **Aumentar o disminuir cantidad:** En la línea del ticket, utilice los botones `+` o `−` para ajustar las unidades (de 1 a 99).
@@ -136,12 +140,14 @@ Para monitorear el estado de las órdenes del salón o llamar a un cliente cuand
 4. Cuando la cocina marque una orden como lista, aparecerá una notificación emergente indicando: *"Pedido #014 listo"*.
 5. Pulse sobre el pedido para abrirlo y proceder al cobro.
 
-[CAPTURA: diálogo de pedidos activos y monitor de mesas ocupadas]
+![Pedidos activos y mesas](../capturas/05-pos-pedidos-activos.png)
+*Figura 5. Monitor de pedidos activos y estado de mesas en salón*
 
 #### 3.2.6 Cobro del Pedido y Emisión de Recibo
 Para liquidar una cuenta:
 
-[CAPTURA: diálogo de cobro con propina y teclado numérico de efectivo]
+![Cobro mixto y propina](../capturas/05-pos-cobro-mixto-cuadrado.png)
+*Figura 6. Diálogo de cobro con soporte de pagos mixtos, propina y teclado táctil*
 
 1. En el ticket del pedido confirmado, presione el botón verde **"Cobrar"**.
 2. **Propina Voluntaria (solo en Mesas):** Si el pedido es para mesa, el sistema consultará de forma transparente si el cliente desea incluir propina voluntaria (Ley 1935 de 2018). Se sugiere un 10 % redondeado hacia abajo a la centena, el cual **nunca viene preseleccionado**.
@@ -152,7 +158,8 @@ Para liquidar una cuenta:
 5. El sistema cerrará la orden, liberará la mesa ocupada y disparará automáticamente la vista de impresión del comprobante de venta POS en formato térmico de 80 mm.
 6. Entregue las vueltas y el comprobante al cliente.
 
-[CAPTURA: recibo POS impreso a 80 mm con leyendas legales]
+![Recibo POS impreso](../capturas/06-pos-recibo-pago-mixto.png)
+*Figura 7. Formato de recibo impreso POS de 80 mm con discriminación de métodos de pago*
 
 #### 3.2.7 Movimientos Manuales de Caja (Ingresos y Retiros)
 Si durante la jornada requiere retirar dinero para una compra menor urgente (ejemplo: bolsas de hielo) o ingresar sencillo adicional:
@@ -162,12 +169,14 @@ Si durante la jornada requiere retirar dinero para una compra menor urgente (eje
 4. Ingrese el monto en pesos y escriba la justificación obligatoria (mínimo 3 caracteres).
 5. Presione **"Registrar Movimiento"**. El sistema actualizará el efectivo esperado de la caja. Un retiro no podrá ejecutarse si supera el efectivo disponible en gaveta.
 
-[CAPTURA: formulario de registro de movimiento manual de caja]
+![Movimiento de caja](../capturas/02-dialogo-ingreso.png)
+*Figura 8. Registro de movimiento manual de caja (ingreso o retiro de efectivo)*
 
 #### 3.2.8 Cierre de Sesión de Caja (Arqueo de Turno)
 Al finalizar la jornada laboral:
 
-[CAPTURA: pantalla de cierre de caja y arqueo ciego]
+![Cierre de caja](../capturas/04-cierre-cuadrado.png)
+*Figura 9. Cierre de turno de caja con arqueo ciego y reporte de diferencias*
 
 1. Diríjase al módulo **Caja** y pulse **"Cerrar Turno"**.
 2. Realice el conteo físico de todo el dinero en efectivo acumulado en la gaveta (billetes y monedas).
@@ -183,7 +192,8 @@ Al finalizar la jornada laboral:
 
 El personal de cocina interactúa con la aplicación mediante la pantalla `/cocina`, diseñada en tema oscuro de alto contraste:
 
-[CAPTURA: pantalla KDS de cocina con tarjetas en columnas Pendiente, Preparación y Lista]
+![Pantalla KDS](../capturas/05-kds-comanda-pendiente.png)
+*Figura 10. Pantalla KDS de cocina con semáforo de tiempos y comandas activas*
 
 #### Flujo de Operación en Cocina:
 1. **Recepción automática:** Tan pronto el cajero confirma una orden en mostrador, una nueva tarjeta de comanda ingresa automáticamente a la columna **"Pendiente"** acompañada de una señal sonora, mostrando el número (#014), modalidad (Mesa 3 o Llevar) y la lista de hamburguesas con sus notas resaltadas.
@@ -200,7 +210,8 @@ El personal de cocina interactúa con la aplicación mediante la pantalla `/coci
 
 El Administrador supervisa la operación global del negocio a través de la ruta `/admin`:
 
-[CAPTURA: panel de control Dashboard del Administrador con KPIs del día]
+![Dashboard administrativo](../capturas/04-admin-dashboard.png)
+*Figura 11. Dashboard gerencial con indicadores clave de ventas y operaciones*
 
 #### 3.4.1 Dashboard del Día y Métricas
 - **Indicadores Clave (KPIs):** Visualización en vivo de Ventas Totales en COP, Número de Pedidos cerrados, Ticket Promedio por compra y Tiempo Promedio de preparación en cocina.
@@ -213,7 +224,8 @@ El Administrador supervisa la operación global del negocio a través de la ruta
 - **Productos:** Registrar artículos con su nombre comercial, categoría, descripción y precio final de venta al público en pesos COP.
 - **Disponibilidad:** El sistema desactiva automáticamente los productos cuando sus ingredientes se agotan, pero el administrador puede forzar manualmente el estado de agotado si así lo requiere.
 
-[CAPTURA: formulario de administración de productos y recetas]
+![Reportes de ventas](../capturas/reportes-dashboard.png)
+*Figura 12. Módulo de reportes detallados y analítica de ventas por canal*
 
 #### 3.4.3 Formulación de Recetas (Escandallo)
 - En la lista de productos, seleccione **"Receta"**.
@@ -225,7 +237,8 @@ El Administrador supervisa la operación global del negocio a través de la ruta
 - **Registrar Ajuste / Merma:** Permite asentar desperdicios físicos o ajustar inventarios tras un conteo físico, exigiendo una justificación textual obligatoria.
 - **Kardex:** Bitácora histórica donde se audita cada movimiento de inventario, con fecha, cantidad, saldo resultante, empleado responsable y pedido causante.
 
-[CAPTURA: tabla del Kardex de inventario con movimientos de consumo y entrada]
+![Kardex de inventario](../capturas/08-admin-inventario-paginacion-pagina1.png)
+*Figura 13. Vista de inventario administrativo y kardex con paginación keyset*
 
 #### 3.4.5 Auditoría y Bitácora de Interacciones
 - Permite al administrador inspeccionar la tabla `evento_sistema`, donde queda registrada cada acción crítica del sistema (pedidos confirmados, comandas listas, cobros, cierres de caja y alertas) con su usuario responsable y carga útil inmutable.

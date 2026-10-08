@@ -5,7 +5,7 @@
 **Programa de Ingeniería de Sistemas**  
 **Asignatura:** Ingeniería de Software  
 **Docente:** Ing. Martín Monroy Ríos, MSc, PhD  
-**Estudiante:** [COMPLETAR: nombre completo del estudiante] [COMPLETAR: Integrantes adicionales del grupo si aplica]  
+**Estudiante:** Manuel Francisco Amell Gil  
 **Fecha:** Octubre de 2026  
 
 ---
@@ -29,7 +29,7 @@ La recolección de información se llevó a cabo utilizando las siguientes técn
 | **Análisis Documental y Conceptual del Sistema** | Revisión profunda del documento académico *Etapa 1 — Definición del Sistema Restaurante*, estableciendo la delimitación entre el sistema y su entorno, sus siete subsistemas principales y las relaciones de retroalimentación. | Delimitación formal de fronteras del sistema, definición de los siete subsistemas funcionales y comprensión del ciclo de vida del pedido. Documento base: `Etapa1_Definicion_del_Sistema_Restaurante.docx`. |
 | **Ingeniería de Requisitos Ágiles (PRD)** | Descomposición de la operación en 7 épicas y 22 historias de usuario estructuradas bajo el formato estándar de la industria, definiendo criterios de aceptación verificables y metas de desempeño operacionales. | Formalización del alcance del MVP y backlog de versiones futuras (v1.1, v1.2 y v2). Documento base: `docs/PRD.md`. |
 | **Levantamiento y Verificación de Reglas de Negocio** | Catalogación sistemática de 32 reglas operativas (RN-01 a RN-61) agrupadas en 7 dimensiones (Dinero, Pedidos, Cocina, Inventario, Caja, Permisos y Auditoría). | Matriz unívoca de reglas de negocio enlazadas al código fuente de backend y frontend que las ejecuta. Documento base: `docs/BUSINESS_RULES.md`. |
-| **Observación Operativa de Punto de Venta** | Estudio de campo sobre el flujo de atención en mostrador y cocina en restaurantes de comidas rápidas [COMPLETAR: Establecimiento observado y fecha de visita]. | Especificación de los requisitos de usabilidad táctil, umbrales de alerta de cocina (8 y 12 minutos) y necesidad de recibos POS no fiscales de 80 mm. |
+| **Observación Operativa de Punto de Venta** | Estudio de campo sobre el flujo de atención en mostrador y cocina en restaurantes de comidas rápidas (Establecimiento de comidas rápidas local, Cartagena de Indias, agosto-octubre 2026). | Especificación de los requisitos de usabilidad táctil, umbrales de alerta de cocina (8 y 12 minutos) y necesidad de recibos POS no fiscales de 80 mm. |
 
 ---
 
