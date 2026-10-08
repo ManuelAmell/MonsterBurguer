@@ -432,3 +432,26 @@ Creadas por la migración `0003_hito2_4_pedidos_cocina_caja.sql`. El módulo `ad
 6. **`v_productos_agotados`:**
    - Productos activos marcados como agotados (`agotado = true`).
    - Campos: `producto_id`, `nombre`, `agotado_manual`.
+
+### Vistas para Reportes por Rango y Alertas (`0006_vistas_reportes.sql`)
+
+Incorporadas en la migración `0006_vistas_reportes.sql` para la Feature D (`feat-reportes`):
+
+7. **`v_reporte_ventas_dia`:**
+   - Agrupa ventas de pedidos cerrados por `fecha_operativa`.
+   - Campos: `fecha_operativa`, `pedidos`, `ventas`, `propinas`, `ticket_promedio`.
+8. **`v_reporte_ventas_producto`:**
+   - Agrupa ventas de ítems cerrados por `fecha_operativa`, `producto_id`, `nombre`.
+   - Campos: `fecha_operativa`, `producto_id`, `nombre`, `pedidos`, `unidades`, `ventas`, `ticket_promedio`.
+9. **`v_reporte_ventas_metodo`:**
+   - Agrupa pagos de pedidos cerrados por `fecha_operativa` y `metodo` de pago (`pago.metodo`).
+   - Campos: `fecha_operativa`, `metodo`, `pedidos`, `ventas`, `propinas`, `ticket_promedio`.
+10. **`v_reporte_ventas_cajero`:**
+    - Agrupa cobros de pedidos cerrados por `fecha_operativa`, `cajero_id`, `cajero_nombre`.
+    - Campos: `fecha_operativa`, `cajero_id`, `cajero_nombre`, `pedidos`, `ventas`, `propinas`, `ticket_promedio`.
+11. **`v_reporte_pedidos_anulados`:**
+    - Agrupa pedidos en estado `ANULADO` por `fecha_operativa`.
+    - Campos: `fecha_operativa`, `pedidos_anulados`.
+12. **`v_pedidos_olvidados`:**
+    - Detecta pedidos `ABIERTO` inactivos por más de 12 horas (`updated_at < NOW() - INTERVAL '12 hours'`, RN-17).
+    - Campos: `pedido_id`, `numero_dia`, `fecha_operativa`, `tipo`, `mesa_id`, `cajero_id`, `cajero_nombre`, `updated_at`, `horas_inactivo`.

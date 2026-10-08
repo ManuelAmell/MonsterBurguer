@@ -770,6 +770,72 @@ Cualquier fallo de negocio, validación o autorización devuelve la estructura d
   }
   ```
 
+#### `GET /api/v1/admin/reportes/ventas`
+- **Roles:** `ADMIN`.
+- **Query:**
+  - `desde`: `YYYY-MM-DD` (obligatorio).
+  - `hasta`: `YYYY-MM-DD` (obligatorio, inclusive; rango máximo de 92 días).
+  - `agrupar`: `dia` | `producto` | `metodo` | `cajero` (por defecto `dia`).
+- **Descripción:** Genera consolidado analítico de ventas en base a pedidos cerrados en el rango de fechas operativas solicitado. Incluye totales generales (ventas, pedidos cerrados, propinas, ticket promedio y pedidos anulados). Todos los montos son enteros en pesos colombianos (COP).
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "desde": "2026-10-01",
+    "hasta": "2026-10-07",
+    "agrupar": "dia",
+    "items": [
+      {
+        "clave": "2026-10-07",
+        "etiqueta": "2026-10-07",
+        "pedidos": 15,
+        "ventas": 420000,
+        "propinas": 35000,
+        "ticketPromedio": 28000
+      }
+    ],
+    "totales": {
+      "pedidos": 15,
+      "ventas": 420000,
+      "propinas": 35000,
+      "ticketPromedio": 28000,
+      "pedidosAnulados": 1
+    }
+  }
+  ```
+
+#### `GET /api/v1/admin/reportes/ventas.csv`
+- **Roles:** `ADMIN`.
+- **Query:** Mismos parámetros que `GET /admin/reportes/ventas`.
+- **Descripción:** Exporta el reporte analítico en formato CSV descargable con BOM UTF-8 (`\uFEFF`) y delimitador `;` para compatibilidad nativa con Microsoft Excel en español.
+- **Headers:**
+  - `Content-Type: text/csv; charset=utf-8`
+  - `Content-Disposition: attachment; filename="reporte-ventas-${desde}-a-${hasta}.csv"`
+
+#### `GET /api/v1/admin/alertas`
+- **Roles:** `ADMIN`.
+- **Descripción:** Consolida alertas operativas activas del restaurante en tiempo real: pedidos abiertos olvidados (> 12 h sin actividad, RN-17), ingredientes con stock bajo o agotados (RN-36) y productos activos agotados.
+- **Respuesta (200 OK):**
+  ```json
+  {
+    "items": [
+      {
+        "id": "ingrediente-0199b2c4-...",
+        "tipo": "STOCK_BAJO",
+        "severidad": "ADVERTENCIA",
+        "timestamp": "2026-10-07T20:20:00.000Z",
+        "datos": {
+          "tipo": "STOCK_BAJO",
+          "ingredienteId": "0199b2c4-...",
+          "nombre": "Agua Cristal 500ml",
+          "unidad": "UND",
+          "stockActual": 10,
+          "stockMinimo": 15
+        }
+      }
+    ]
+  }
+  ```
+
 ---
 
 ### 3.11. Tiempo Real — Server-Sent Events (SSE)
@@ -811,4 +877,4 @@ Los siguientes endpoints fueron previstos en las etapas de diseño preliminares 
 4. **Movimientos de Caja Manuales (`POST /caja/sesiones/:id/movimientos`):** Ingresos y retiros manuales no están implementados en el servicio ni en el controlador de caja.
 5. **Historial de Cierres de Caja (`GET /caja/sesiones`):** Consulta histórica de arqueos de caja diferida.
 6. **Pagos Mixtos en Cobro:** `POST /caja/cobros` valida estrictamente un único método de pago en el MVP.
-7. **Configuración y Reportes Avanzados (`/admin/configuracion`, `/admin/reportes/ventas`):** La edición dinámica de parámetros del negocio y reportes agrupados por rango de fechas están planificados para hitos posteriores.
+7. **Configuración Avanzada (`/admin/configuracion`):** La edición dinámica de parámetros del negocio está planificada para hitos posteriores (los reportes agrupados por rango de fechas y alertas operativas ya se encuentran implementados en `/admin/reportes/ventas` y `/admin/alertas`).

@@ -86,7 +86,7 @@
 - [x] Endpoint `GET /api/v1/admin/eventos` para auditar la bitácora de eventos del sistema (`evento_sistema`).
 - [x] Retroalimentación automática de stock: al agotarse un ingrediente, los productos que lo requieren se marcan `agotado = true` en base de datos y se notifica vía SSE al POS (RN-36).
 - [x] Pantalla `/admin`: tarjetas de KPIs principales (ventas, pedidos, ticket promedio, tiempos KDS) y estado del inventario.
-- [ ] *Pendiente:* Pantalla de reportes analíticos con filtro por rango de fechas y exportación (CSV/PDF).
+- [x] Pantalla de reportes analíticos con filtro por rango de fechas y exportación CSV (`/admin/reportes`, endpoints `GET /api/v1/admin/reportes/ventas`, `GET /api/v1/admin/reportes/ventas.csv` y alertas operativas `GET /api/v1/admin/alertas`).
 - [ ] *Pendiente:* Interfaz web para visualizar la bitácora de eventos de `evento_sistema`.
 - [ ] *Pendiente:* Interfaz web para editar parámetros de configuración (`/admin/configuracion`).
 
@@ -134,9 +134,10 @@ Lista de ítems técnicos y funcionales identificados que deben abordarse en las
 6. **Accesibilidad y Trampa de Foco en Diálogos Modales:**
    - Asegurar que al abrir diálogos (`CobroDialog`, diálogos de confirmación y `NumericKeypad`), el foco del teclado quede atrapado dentro del modal (`focus-trap`) y regrese al elemento disparador al cerrarse con `Escape`.
 
-7. **Reportes Analíticos y Filtro por Fechas:**
-   - Exponer endpoint `GET /api/v1/admin/reportes/ventas` con parámetros de rango (`desde`, `hasta`) y agrupación (`dia`, `producto`, `categoria`).
-   - Crear vista en frontend con tablas y gráficos de Recharts.
+7. **Reportes Analíticos y Filtro por Fechas (Feature D — completado en `feat/reportes-alertas`):**
+   - Endpoints `GET /api/v1/admin/reportes/ventas` y `GET /api/v1/admin/reportes/ventas.csv` con parámetros de rango (`desde`, `hasta`) y agrupación (`dia`, `producto`, `metodo`, `cajero`).
+   - Pantalla analítica en frontend (`/admin/reportes`) con tarjetas KPI, gráfico de barras accesible en SVG nativo, tabla interactiva y descarga directa de CSV con BOM UTF-8 y delimitador `;`.
+   - Endpoint `GET /api/v1/admin/alertas` y widget consolidado de alertas del sistema en el panel administrativo (`/admin`).
 
 8. **Documento Equivalente Electrónico POS (DEE POS DIAN — v2.0):**
    - Integración con Proveedor Tecnológico autorizado por la DIAN para generar código CUDE, firma digital y código QR en el recibo.
