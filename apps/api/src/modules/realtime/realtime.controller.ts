@@ -69,6 +69,9 @@ export class RealtimeController {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
+    // Primer chunk inmediato: algunos proxies (el de Vite en desarrollo) no reenvían las
+    // cabeceras hasta recibir cuerpo; sin esto el EventSource no abre hasta el primer heartbeat.
+    res.write('retry: 3000\n\n');
 
     // Reenvío de eventos perdidos según Last-Event-ID
     const lastEventIdHeader = req.headers['last-event-id'];
