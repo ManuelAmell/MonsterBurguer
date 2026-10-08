@@ -444,8 +444,12 @@ Incorporadas en la migración `0006_vistas_reportes.sql` para la Feature D (`fea
    - Agrupa ventas de ítems cerrados por `fecha_operativa`, `producto_id`, `nombre`.
    - Campos: `fecha_operativa`, `producto_id`, `nombre`, `pedidos`, `unidades`, `ventas`, `ticket_promedio`.
 9. **`v_reporte_ventas_metodo`:**
-   - Agrupa pagos de pedidos cerrados por `fecha_operativa` y `metodo` de pago (`pago.metodo`).
-   - Campos: `fecha_operativa`, `metodo`, `pedidos`, `ventas`, `propinas`, `ticket_promedio`.
+   - Agrupa pagos de pedidos cerrados por `fecha_operativa` y `metodo` de pago (`pago.metodo`). Actualizada en la migración `0007_reporte_metodo_pagos.sql` para soportar pagos mixtos:
+     - `ventas`: suma exacta de montos cobrados por método (`pago.monto`).
+     - `propinas`: distribuida proporcionalmente según el peso de cada método, asignando el residuo de redondeo al método de mayor monto.
+     - `cobrado`: suma total recaudada por método (`ventas + propinas`).
+     - `pedidos`: conteo de recibos distintos sin duplicación ante pagos mixtos (`COUNT(DISTINCT r.id)`).
+   - Campos: `fecha_operativa`, `metodo`, `pedidos`, `ventas`, `propinas`, `cobrado`, `ticket_promedio`.
 10. **`v_reporte_ventas_cajero`:**
     - Agrupa cobros de pedidos cerrados por `fecha_operativa`, `cajero_id`, `cajero_nombre`.
     - Campos: `fecha_operativa`, `cajero_id`, `cajero_nombre`, `pedidos`, `ventas`, `propinas`, `ticket_promedio`.
