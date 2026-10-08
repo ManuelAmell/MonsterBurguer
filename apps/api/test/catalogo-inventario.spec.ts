@@ -11,6 +11,7 @@ import { CatalogoService } from '../src/modules/catalogo/catalogo.service';
 import { InventarioService } from '../src/modules/inventario/inventario.service';
 import { ingrediente, movimientoInventario } from '../src/modules/inventario/inventario.schema';
 import { configuracion, CONFIGURACION_INICIAL } from '../src/shared-kernel/configuracion/configuracion.schema';
+import { nuevoId } from '../src/shared-kernel/ids';
 import { crearUsuario, DATABASE_URL_TEST, prepararBaseDeTest } from './helpers/test-db';
 
 const ORIGEN = 'http://localhost:5173';
@@ -847,6 +848,54 @@ describe.skipIf(!DATABASE_URL_TEST)('Hito 1: Catálogo e Inventario (RN-30 a RN-
         codigo: 'NOMBRE_DUPLICADO',
         mensaje: 'Ya existe un ingrediente con ese nombre.',
       });
+    });
+  });
+
+  describe('Paginación de ingredientes por cursor keyset (nombre, id)', () => {
+    it('pagina deterministicamente >100 ingredientes sin duplicados ni perdidas', async () => {
+      const totalNuevos = 110;
+      const lote = [];
+      for (let i = 1; i <= totalNuevos; i++) {
+        const sufijo = String(i).padStart(3, '0');
+        lote.push({
+          id: nuevoId(),
+          nombre: `Z-Ingrediente-Prueba-${sufijo}`,
+          unidad: 'UND' as const,
+          stockActual: 10,
+          stockMinimo: 5,
+          costoUnitario: 1000,
+          activo: true,
+        });
+      }
+      await db.insert(ingrediente).values(lote);
+
+      const idsRecuperados: string[] = [];
+      const nombresRecuperados: string[] = [];
+      let cursor: string | null = null;
+      let paginas = 0;
+
+      do {
+        const query = cursor ? `?limit=40&cursor=${encodeURIComponent(cursor)}` : '?limit=40';
+        const res = await get(`/ingredientes${query}`, cookieAdmin);
+        expect(res.status).toBe(200);
+        const data = (await res.json()) as { items: Array<{ id: string; nombre: string }>; nextCursor: string | null };
+        for (const item of data.items) {
+          idsRecuperados.push(item.id);
+          nombresRecuperados.push(item.nombre);
+        }
+        cursor = data.nextCursor;
+        paginas++;
+      } while (cursor !== null && paginas < 10);
+
+      const idsSet = new Set(idsRecuperados);
+      expect(idsSet.size).toBe(idsRecuperados.length);
+      for (const item of lote) {
+        expect(idsSet.has(item.id)).toBe(true);
+      }
+
+      for (let i = 1; i < nombresRecuperados.length; i++) {
+        expect(nombresRecuperados[i]!.localeCompare(nombresRecuperados[i - 1]!)).toBeGreaterThanOrEqual(0);
+      }
     });
   });
 });

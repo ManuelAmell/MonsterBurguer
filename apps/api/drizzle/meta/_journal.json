@@ -43,6 +43,13 @@
       "when": 1791333000000,
       "tag": "0006_vistas_reportes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791334000000,
+      "tag": "0007_reporte_metodo_pagos",
+      "breakpoints": true
     }
   ]
 }

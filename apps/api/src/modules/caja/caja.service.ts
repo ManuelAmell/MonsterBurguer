@@ -393,14 +393,6 @@ export class CajaService {
 
   async cobrar(input: CobroInput, usuario: UsuarioSesion): Promise<CobroRespuesta> {
     const propina = input.propina ?? 0;
-    if (input.pagos.length !== 1) {
-      throw new DomainError(
-        CODIGOS_ERROR.VALIDACION,
-        'En el MVP el cobro admite un solo método de pago.',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-    const metodoPago = input.pagos[0]!;
 
     return this.db.transaction(async (tx) => {
       const [sesion] = await tx
@@ -418,16 +410,27 @@ export class CajaService {
 
       const ped = await this.pedidos.prepararCobro(tx, input.pedidoId, usuario.id);
       const esperado = ped.total + propina;
-      if (metodoPago.monto !== esperado) {
+      const sumaMontos = input.pagos.reduce((acc, p) => acc + p.monto, 0);
+      if (sumaMontos !== esperado) {
         throw new DomainError(
           'PAGOS_NO_CUADRAN',
           'El pago no coincide con total + propina (RN-43).',
           HttpStatus.CONFLICT,
-          { esperado, recibido: metodoPago.monto },
+          { esperado, recibido: sumaMontos },
         );
       }
-      const cambio =
-        metodoPago.metodo === 'EFECTIVO' ? (metodoPago.recibido ?? 0) - metodoPago.monto : 0;
+
+      const efectivos = input.pagos.filter((p) => p.metodo === 'EFECTIVO');
+      if (efectivos.length > 1) {
+        throw new DomainError(
+          CODIGOS_ERROR.VALIDACION,
+          'Solo se permite un único pago en EFECTIVO por cobro (RN-43).',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const pagoEfectivo = efectivos[0];
+      const cambio = pagoEfectivo ? (pagoEfectivo.recibido ?? 0) - pagoEfectivo.monto : 0;
 
       const regimen = await leerRegimen(tx);
       const reciboId = nuevoId();
@@ -446,15 +449,20 @@ export class CajaService {
           propina,
         })
         .returning({ numero: recibo.numero });
-      await tx.insert(pago).values({
-        id: nuevoId(),
-        reciboId,
-        metodo: metodoPago.metodo,
-        monto: metodoPago.monto,
-        recibido: metodoPago.metodo === 'EFECTIVO' ? (metodoPago.recibido ?? null) : null,
-        cambio: metodoPago.metodo === 'EFECTIVO' ? cambio : null,
-        referencia: metodoPago.referencia ?? null,
-      });
+
+      for (const p of input.pagos) {
+        const pagoCambio = p.metodo === 'EFECTIVO' ? (p.recibido ?? 0) - p.monto : null;
+        await tx.insert(pago).values({
+          id: nuevoId(),
+          reciboId,
+          metodo: p.metodo,
+          monto: p.monto,
+          recibido: p.metodo === 'EFECTIVO' ? (p.recibido ?? null) : null,
+          cambio: pagoCambio,
+          referencia: p.referencia ?? null,
+        });
+      }
+
       await this.pedidos.cerrar(tx, ped.id);
       await this.eventBus.publicarEnTx(tx, {
         tipo: 'PedidoCobrado',
