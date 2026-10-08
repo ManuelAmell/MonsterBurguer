@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   Boxes,
   ChefHat,
   LayoutDashboard,
@@ -37,6 +38,7 @@ export const NAV: ItemNav[] = [
   { to: '/admin/productos', label: t.admin.nav.productos, icon: Package, roles: ['ADMIN'] },
   { to: '/admin/categorias', label: t.admin.nav.categorias, icon: Tags, roles: ['ADMIN'] },
   { to: '/admin/inventario', label: t.admin.nav.inventario, icon: Boxes, roles: ['ADMIN'] },
+  { to: '/admin/reportes', label: t.admin.nav.reportes, icon: BarChart3, roles: ['ADMIN'] },
   { to: '/admin/usuarios', label: t.admin.nav.usuarios, icon: Users, roles: ['ADMIN'] },
   { to: '/admin/configuracion', label: t.admin.nav.configuracion, icon: Settings, roles: ['ADMIN'] },
 ];
