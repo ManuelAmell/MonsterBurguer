@@ -1,12 +1,14 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   agregarPedidoItemSchema,
+  anularPedidoSchema,
   crearPedidoSchema,
   editarPedidoItemSchema,
   type EditarPedidoItemOutput,
   listarPedidosQuerySchema,
   uuidSchema,
   type AgregarPedidoItemOutput,
+  type AnularPedidoOutput,
   type CrearPedidoOutput,
   type ListarPedidosQuery,
   type Pedido,
@@ -77,5 +79,16 @@ export class PedidosController {
     @UsuarioActual() usuario: UsuarioSesion,
   ): Promise<Pedido> {
     return this.pedidos.confirmar(id, usuario.id);
+  }
+
+  @Roles('ADMIN')
+  @Post(':id/anular')
+  @HttpCode(HttpStatus.OK)
+  async anular(
+    @Param('id', IdPipe) id: string,
+    @Body(new ZodPipe(anularPedidoSchema)) body: AnularPedidoOutput,
+    @UsuarioActual() usuario: UsuarioSesion,
+  ): Promise<Pedido> {
+    return this.pedidos.anular(id, body.motivo, body.version, usuario.id);
   }
 }

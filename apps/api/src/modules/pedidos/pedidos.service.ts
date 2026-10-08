@@ -208,6 +208,98 @@ export class PedidosService {
     return this.obtenerPedido(pedidoId);
   }
 
+  /**
+   * RN-50: Anulación de pedido (solo ADMIN). Todo en una sola transacción:
+   * - pedido -> ANULADO (motivo, usuario, anuladoAt, version + 1).
+   * - Si tiene comanda: comanda -> ANULADA.
+   * - RN-35, stock:
+   *   - comanda PENDIENTE -> movimiento REVERSION (devuelve stock).
+   *   - comanda EN_PREPARACION o posterior -> movimiento MERMA (reclasifica como merma, no devuelve stock).
+   *   - pedido ABIERTO sin comanda -> no toca stock.
+   * - Mesa liberada automáticamente al pasar a ANULADO.
+   * - Eventos PedidoAnulado y ComandaAnulada vía EventBus.
+   */
+  async anular(
+    pedidoId: string,
+    motivo: string,
+    version: number,
+    usuarioId: string,
+  ): Promise<Pedido> {
+    await this.db.transaction(async (tx) => {
+      const p = await this.repo.bloquearPedido(pedidoId, tx);
+      if (!p) throw DomainError.noEncontrado('Pedido no encontrado.');
+      if (p.version !== version) {
+        throw new DomainError(
+          CODIGOS_ERROR.VERSION_CONFLICT,
+          'El pedido fue modificado por otro usuario. Recarga e inténtalo de nuevo.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (p.estado !== 'ABIERTO' && p.estado !== 'CONFIRMADO') {
+        throw new DomainError(
+          CODIGOS_ERROR.ESTADO_INVALIDO,
+          `El pedido está ${p.estado} y no se puede anular (RN-50).`,
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      // Si tiene comanda, anular comanda y procesar inventario según estado de la comanda
+      const comandaAnulada = await this.cocina.anularComanda(tx, p.id);
+      if (comandaAnulada) {
+        const items = await this.repo.itemsDe([p.id], tx);
+        const itemsConsumo = items.map((i) => ({ productoId: i.productoId, cantidad: i.cantidad }));
+
+        if (comandaAnulada.estadoPrevio === 'PENDIENTE') {
+          // RN-35: comanda PENDIENTE -> movimiento REVERSION (devuelve stock)
+          await this.inventario.revertir(tx, itemsConsumo, usuarioId, p.id);
+        } else {
+          // RN-35: comanda EN_PREPARACION o posterior -> movimiento MERMA (reclasifica como merma, no devuelve stock)
+          await this.inventario.reclasificarConsumoComoMerma(tx, itemsConsumo, usuarioId, motivo, p.id);
+        }
+
+        await this.eventBus.publicarEnTx(tx, {
+          tipo: 'ComandaAnulada',
+          modulo: 'cocina',
+          agregadoId: comandaAnulada.comandaId,
+          usuarioId,
+          payload: {
+            comandaId: comandaAnulada.comandaId,
+            pedidoId: p.id,
+            numeroDia: p.numeroDia,
+            motivo,
+          },
+        });
+      }
+
+      await this.repo.actualizarPedido(
+        p.id,
+        {
+          estado: 'ANULADO',
+          anuladoAt: new Date(),
+          anuladoPor: usuarioId,
+          motivoAnulacion: motivo,
+          version: p.version + 1,
+        },
+        tx,
+      );
+
+      await this.eventBus.publicarEnTx(tx, {
+        tipo: 'PedidoAnulado',
+        modulo: 'pedidos',
+        agregadoId: p.id,
+        usuarioId,
+        payload: {
+          pedidoId: p.id,
+          numeroDia: p.numeroDia,
+          motivo,
+          mesaId: p.mesaId,
+        },
+      });
+    });
+
+    return this.obtenerPedido(pedidoId);
+  }
+
   // --- API pública para caja ---
 
   /** Prepara el cobro dentro de la tx de caja: confirma si estaba ABIERTO (RN-44). */

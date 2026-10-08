@@ -58,4 +58,15 @@ export class CocinaController {
   ): Promise<Comanda> {
     return this.cocina.transicionar('entregar', id, body.version, usuario.id);
   }
+
+  @Roles('ADMIN', 'COCINA')
+  @Post(':id/deshacer')
+  @HttpCode(HttpStatus.OK)
+  async deshacer(
+    @Param('id', IdPipe) id: string,
+    @Body(new ZodPipe(transicionComandaSchema)) body: TransicionComandaInput,
+    @UsuarioActual() usuario: UsuarioSesion,
+  ): Promise<Comanda> {
+    return this.cocina.deshacer(id, body.version, usuario.id);
+  }
 }

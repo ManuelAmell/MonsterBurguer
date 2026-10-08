@@ -400,6 +400,28 @@ Cualquier fallo de negocio, validación o autorización devuelve la estructura d
   5. Cambia el estado del pedido a `CONFIRMADO` y publica el evento `PedidoConfirmado` en `evento_sistema`.
 - **Respuesta (200 OK):** Pedido en estado `CONFIRMADO`.
 
+#### `POST /api/v1/pedidos/:id/anular`
+- **Roles:** `ADMIN` (RN-50).
+- **Cuerpo (`anularPedidoSchema`):**
+  ```json
+  {
+    "motivo": "Cliente canceló el pedido por demora",
+    "version": 0
+  }
+  ```
+- **Descripción:** Anula un pedido en estado `ABIERTO` o `CONFIRMADO` en una única transacción:
+  1. Valida control de concurrencia optimista mediante `version` (`409 VERSION_CONFLICT`).
+  2. Valida que el pedido esté en `ABIERTO` o `CONFIRMADO` (`409 ESTADO_INVALIDO`).
+  3. Si tiene comanda asociada, la marca como `ANULADA` vía `cocina.anularComanda`.
+  4. Gestiona inventario según el avance de la comanda (RN-35):
+     - Sin comanda / `ABIERTO`: no altera inventario (aún no se consumió).
+     - Comanda `PENDIENTE`: revierte el consumo (`inventario.revertir`), reponiendo existencias y emitiendo `IngredienteRepuesto` si supera el stock mínimo (RN-36).
+     - Comanda `EN_PREPARACION`, `LISTA` o `ENTREGADA`: reclasifica el consumo como merma (`inventario.reclasificarConsumoComoMerma`), registrando el par de movimientos `REVERSION` + `MERMA` (efecto neto 0 en stock, trazabilidad completa en kardex).
+  5. Libera la mesa automáticamente si el pedido era de tipo `MESA`.
+  6. Actualiza el pedido a estado `ANULADO`, registrando `anuladoAt`, `anuladoPor` y `motivoAnulacion`.
+  7. Publica `PedidoAnulado` y `ComandaAnulada` en `evento_sistema`.
+- **Respuesta (200 OK):** Objeto pedido actualizado en estado `ANULADO`.
+
 ---
 
 ### 3.7. Cocina (KDS)
@@ -451,6 +473,17 @@ Cualquier fallo de negocio, validación o autorización devuelve la estructura d
 - **Cuerpo (`transicionComandaSchema`):** `{ "version": 2 }`.
 - **Transición:** `LISTA` → `ENTREGADA`. Registra `entregada_at` y publica `ComandaEntregada`.
 - **Respuesta (200 OK):** Comanda finalizada.
+
+#### `POST /api/v1/comandas/:id/deshacer`
+- **Roles:** `ADMIN`, `COCINA` (RN-22).
+- **Cuerpo (`transicionComandaSchema`):** `{ "version": 1 }`.
+- **Descripción:** Revierte la última transición de comanda si ocurrió hace $\le$ 10 segundos:
+  - `EN_PREPARACION` $\to$ `PENDIENTE` (restablece `iniciadaAt` a `null`).
+  - `LISTA` $\to$ `EN_PREPARACION` (restablece `listaAt` a `null`).
+  - `ENTREGADA` $\to$ `LISTA` (restablece `entregadaAt` a `null`).
+  - Si han transcurrido más de 10 segundos desde la última transición, rechaza con `409 TIEMPO_EXPIRADO`.
+  - Publica el evento de dominio `ComandaDeshecha` y notifica en tiempo real a los canales `cocina` y `pos`.
+- **Respuesta (200 OK):** Comanda en su estado previo con `version` incrementada.
 
 ---
 

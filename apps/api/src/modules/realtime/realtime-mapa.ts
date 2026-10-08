@@ -36,7 +36,17 @@ export const MAPA_EVENTOS_SSE_DEFECTO: readonly ReglaMapeoEvento[] = [
     canales: ['cocina', 'pos'],
   },
   {
+    eventoOrigen: 'ComandaDeshecha',
+    eventoSse: 'comanda.estado',
+    canales: ['cocina', 'pos'],
+  },
+  {
     eventoOrigen: 'PedidoAnulado',
+    eventoSse: 'comanda.anulada',
+    canales: ['cocina', 'pos'],
+  },
+  {
+    eventoOrigen: 'ComandaAnulada',
     eventoSse: 'comanda.anulada',
     canales: ['cocina', 'pos'],
   },

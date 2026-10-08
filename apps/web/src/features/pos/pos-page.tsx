@@ -1,4 +1,4 @@
-import { AlertCircle, Loader2, Plus, ReceiptText, ShoppingCart, StickyNote, UtensilsCrossed } from 'lucide-react';
+import { AlertCircle, Ban, Loader2, Plus, ReceiptText, ShoppingCart, StickyNote, UtensilsCrossed } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -21,9 +21,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useSesion } from '@/features/auth/session';
 import { useEventStream } from '@/hooks/use-event-stream';
 import { t } from '@/i18n/es';
 import { ApiError } from '@/lib/api';
+import { AnularPedidoDialog } from './anular-pedido-dialog';
 import { CobroDialog, type CobroExitoso } from './cobro-dialog';
 import { NotaItemDialog } from './nota-item-dialog';
 import { PedidosActivosDialog } from './pedidos-activos-dialog';
@@ -63,7 +65,10 @@ export function PosPage() {
   const [faltantes, setFaltantes] = useState<FaltanteStock[] | null>(null);
   const [cobrando, setCobrando] = useState(false);
   const [exito, setExito] = useState<CobroExitoso | null>(null);
+  const { data: usuario } = useSesion();
+  const esAdmin = usuario?.rol === 'ADMIN';
   const [mostrarActivos, setMostrarActivos] = useState(false);
+  const [mostrarAnular, setMostrarAnular] = useState(false);
   const [itemParaNota, setItemParaNota] = useState<{ id: string; nombre: string; nota: string } | null>(null);
 
   const pedidoQ = usePedido(pedidoId);
@@ -265,6 +270,18 @@ export function PosPage() {
           )}
         </Button>
 
+        {pedido && esAdmin && (pedido.estado === 'ABIERTO' || pedido.estado === 'CONFIRMADO') && (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 min-h-12 gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+            onClick={() => setMostrarAnular(true)}
+          >
+            <Ban className="size-4" aria-hidden="true" />
+            {t.pos.anular}
+          </Button>
+        )}
+
         {pedidoId && (
           <Button type="button" variant="outline" className="h-12 min-h-12 gap-1.5" onClick={reiniciar}>
             <Plus className="size-4" aria-hidden="true" />
@@ -397,8 +414,31 @@ export function PosPage() {
             textoAccionSecundaria={!esLlevar && !confirmado ? t.pos.cobrar : undefined}
             onAccionSecundaria={() => setCobrando(true)}
           />
+          {pedido && esAdmin && (pedido.estado === 'ABIERTO' || pedido.estado === 'CONFIRMADO') && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 min-h-12 w-full gap-2 font-semibold text-destructive border-destructive/30 hover:bg-destructive/10"
+              onClick={() => setMostrarAnular(true)}
+            >
+              <Ban className="size-4" aria-hidden="true" />
+              {t.pos.anular}
+            </Button>
+          )}
         </aside>
       </div>
+
+      {mostrarAnular && pedido && (
+        <AnularPedidoDialog
+          pedido={pedido}
+          abierto={mostrarAnular}
+          onCerrar={() => setMostrarAnular(false)}
+          onAnulado={() => {
+            setMostrarAnular(false);
+            reiniciar();
+          }}
+        />
+      )}
 
       {cobrando && pedido && (
         <CobroDialog
