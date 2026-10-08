@@ -180,6 +180,32 @@ pnpm depcruise      # Verificación de fronteras modulares
 pnpm typecheck      # Verificación tsc sin emisión en todos los paquetes
 ```
 
+### 4.4. Pruebas End-to-End (E2E) con Playwright
+- **Herramienta:** Playwright Test ejecutando sobre Google Chrome instalado (`channel: 'chrome'`).
+- **Ubicación:** `apps/web/e2e/`.
+- **Configuración:** `apps/web/playwright.config.ts`.
+- **Aislamiento y entorno:**
+  - El archivo `global-setup.ts` ejecuta `db:migrate` y `db:seed` antes de iniciar la suite contra la base de datos de pruebas configurada.
+  - La suite corre con 1 worker (`workers: 1`) para optimizar el consumo de memoria en entornos con recursos limitados.
+  - El bloque `webServer` levanta automáticamente el backend (`apps/api`, puerto configurado) y el frontend (`apps/web` con Vite), apagándolos de forma segura al finalizar.
+- **Comandos de ejecución:**
+  ```bash
+  # Ejecutar todas las pruebas E2E
+  pnpm --filter web test:e2e
+
+  # Ejecutar un flujo o spec específico
+  pnpm --filter web test:e2e e2e/venta-llevar.spec.ts
+  ```
+- **Suites y flujos críticos implementados:**
+  1. `auth.spec.ts`: Login de los 3 roles (`ADMIN`, `CAJERO`, `COCINA`), redirección por rol, bloqueo de rutas no autorizadas y cierre de sesión.
+  2. `venta-llevar.spec.ts`: Apertura de caja, pedido para llevar, agregar productos, cobro en efectivo con cálculo de cambio y emisión de recibo "Documento no fiscal".
+  3. `venta-mesa.spec.ts`: Pedido en mesa con notas por ítem ("sin cebolla"), recepción en tiempo real en KDS (SSE) sin recargar, avance de estados de cocina, reanudación del pedido desde "Pedidos activos", cobro con propina sugerida y liberación de mesa.
+  4. `stock.spec.ts`: Validación de stock insuficiente (409), modal accesible de faltantes, preservación del estado abierto del pedido y confirmación exitosa tras reabastecimiento.
+  5. `caja.spec.ts`: Ciclo operativo de caja: apertura base, ingreso manual, retiro manual, arqueo y cierre cuadrado con teclado numérico, y consulta en historial de cierres.
+  6. `admin.spec.ts`: Creación y desactivación de usuarios (pérdida inmediata de sesión), creación de categorías reflejadas en el catálogo del POS, consulta de reportes con exportación a CSV (validación de encabezados) y alertas de stock bajo en dashboard.
+  7. `anular.spec.ts`: Anulación administrativa de pedido confirmado con comanda pendiente (reversión automática de stock y liberación de mesa) y deshacer transición de estado en KDS dentro de la ventana de 10 segundos.
+
+
 ---
 
 ## 5. Glosario del Dominio (MonsterBurguer POS)
