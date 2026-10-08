@@ -135,6 +135,24 @@ export function useConfirmarPedido() {
   });
 }
 
+export function useAnularPedido() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ pedidoId, motivo, version }: { pedidoId: string; motivo: string; version: number }) =>
+      api<Pedido>(`/pedidos/${pedidoId}/anular`, {
+        method: 'POST',
+        body: { motivo, version },
+      }),
+    onSuccess: (data, { pedidoId }) => {
+      aplicarRespuesta(qc, pedidoId, data);
+      void qc.invalidateQueries({ queryKey: ['pedidos'] });
+      void qc.invalidateQueries({ queryKey: ['comandas'] });
+      void qc.invalidateQueries({ queryKey: claves.mesas });
+      void qc.invalidateQueries({ queryKey: claves.activos });
+    },
+  });
+}
+
 /** Faltantes de un 409 STOCK_INSUFICIENTE (`detalles.faltantes`, docs/API.md § Formato de error). */
 export interface FaltanteStock {
   ingredienteId?: string;

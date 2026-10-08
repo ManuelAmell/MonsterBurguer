@@ -1,4 +1,4 @@
-import { AlertCircle, ChefHat, Loader2, LogOut, Wifi, WifiOff } from 'lucide-react';
+import { AlertCircle, ChefHat, Loader2, LogOut, RotateCcw, Wifi, WifiOff, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -45,6 +45,12 @@ export function CocinaPage() {
   const qc = useQueryClient();
   const ahora = useAhora();
   const stream = useEventStream(['cocina']);
+  const [ultimaTransicion, setUltimaTransicion] = useState<{
+    id: string;
+    numeroDia: number;
+    version: number;
+    expiraAt: number;
+  } | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -59,13 +65,45 @@ export function CocinaPage() {
 
   const avanzar = useMutation({
     mutationFn: ({ id, accion, version }: { id: string; accion: string; version: number }) =>
-      api<unknown>(`/comandas/${id}/${accion}`, { method: 'POST', body: { version } }),
+      api<Comanda>(`/comandas/${id}/${accion}`, { method: 'POST', body: { version } }),
+    onSuccess: (comandaActualizada) => {
+      setUltimaTransicion({
+        id: comandaActualizada.id,
+        numeroDia: comandaActualizada.numeroDia,
+        version: comandaActualizada.version,
+        expiraAt: Date.now() + 10_000,
+      });
+    },
     onSettled: () => void qc.invalidateQueries({ queryKey: ['comandas'] }),
     onError: (err) =>
       toast.error(
         err instanceof ApiError && err.codigo === 'VERSION_CONFLICT' ? t.cocinaKds.conflicto : t.cocinaKds.errorAvanzar,
       ),
   });
+
+  const deshacer = useMutation({
+    mutationFn: ({ id, version }: { id: string; version: number }) =>
+      api<Comanda>(`/comandas/${id}/deshacer`, { method: 'POST', body: { version } }),
+    onSuccess: () => {
+      toast.success(t.cocinaKds.deshechoExito);
+      setUltimaTransicion(null);
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['comandas'] }),
+    onError: (err) => {
+      if (err instanceof ApiError && err.codigo === 'TIEMPO_EXPIRADO') {
+        toast.error(t.cocinaKds.deshacerExpirado);
+      } else {
+        toast.error(t.cocinaKds.errorDeshacer);
+      }
+      setUltimaTransicion(null);
+    },
+  });
+
+  const transicionActiva =
+    ultimaTransicion && ahora < ultimaTransicion.expiraAt ? ultimaTransicion : null;
+  const segundosRestantes = transicionActiva
+    ? Math.max(0, Math.ceil((transicionActiva.expiraAt - ahora) / 1000))
+    : 0;
 
   const lista = (comandas.data ?? [])
     .filter((c) => (['PENDIENTE', 'EN_PREPARACION', 'LISTA'] as EstadoComanda[]).includes(c.estado))
@@ -139,7 +177,7 @@ export function CocinaPage() {
                       items={c.items.map((i) => ({ cantidad: i.cantidad, nombre: i.nombre, nota: i.nota ?? undefined }))}
                       estado={col.estado}
                       textoAvanzar={col.texto}
-                      deshabilitado={avanzar.isPending}
+                      deshabilitado={avanzar.isPending || deshacer.isPending}
                       onAvanzar={() => avanzar.mutate({ id: c.id, accion: col.accion, version: c.version })}
                     />
                   ))}
@@ -149,6 +187,48 @@ export function CocinaPage() {
           </div>
         )}
       </main>
+
+      {/* Barra flotante para deshacer última transición (RN-22, DESIGN.md §7.4) */}
+      {transicionActiva && segundosRestantes > 0 && (
+        <aside
+          role="status"
+          aria-label={t.cocinaKds.deshacer}
+          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-2xl motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 duration-200"
+        >
+          <div className="flex flex-col px-1">
+            <span className="text-sm font-semibold text-card-foreground">
+              #{String(transicionActiva.numeroDia).padStart(3, '0')}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {segundosRestantes}s
+            </span>
+          </div>
+          <Button
+            variant="secondary"
+            size="default"
+            onClick={() => deshacer.mutate({ id: transicionActiva.id, version: transicionActiva.version })}
+            disabled={deshacer.isPending}
+            aria-label={t.cocinaKds.deshacerAria(segundosRestantes)}
+            className="h-12 min-h-12 min-w-12 gap-2 px-4 text-base font-semibold"
+          >
+            {deshacer.isPending ? (
+              <Loader2 aria-hidden="true" className="size-5 animate-spin" />
+            ) : (
+              <RotateCcw aria-hidden="true" className="size-5" />
+            )}
+            {t.cocinaKds.deshacerConCuenta(segundosRestantes)}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setUltimaTransicion(null)}
+            aria-label={t.cocinaKds.descartar}
+            className="h-12 min-h-12 w-12 min-w-12 text-muted-foreground hover:text-foreground"
+          >
+            <X aria-hidden="true" className="size-5" />
+          </Button>
+        </aside>
+      )}
     </div>
   );
 }

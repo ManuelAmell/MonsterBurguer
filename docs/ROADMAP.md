@@ -108,10 +108,10 @@
 
 Lista de ítems técnicos y funcionales identificados que deben abordarse en las siguientes iteraciones:
 
-1. **Anulación de Pedidos (`POST /pedidos/:id/anular` — RN-50 y RN-35):**
+1. **Anulación de Pedidos (`POST /pedidos/:id/anular` — RN-50 y RN-35)** (completado en `feat/anular-deshacer`):
    - Exponer endpoint en `pedidos.controller.ts` restringido a rol `ADMIN` con motivo de al menos 5 caracteres.
    - Conectar con `cocina.public.ts` para marcar la comanda `ANULADA` y con `inventario.public.ts` para emitir `REVERSION` (si la comanda estaba `PENDIENTE`) o `MERMA` (si ya estaba en cocina).
-   - Agregar botón de anulación en el ticket del POS y en la lista de pedidos de administración.
+   - Agregar botón de anulación en el ticket del POS y diálogo de confirmación accesible.
 
 2. **Pagos Mixtos en Cobro (RN-42 y RN-43):**
    - Modificar la restricción `if (input.pagos.length !== 1)` en `caja.service.ts` para aceptar múltiples métodos de pago (ej. $30.000 Efectivo + $19.700 Tarjeta).

@@ -76,7 +76,7 @@ export class CocinaService {
   ): Promise<{ comandaId: string; estadoPrevio: EstadoComanda } | null> {
     const fila = await this.repo.bloquearPorPedidoId(pedidoId, tx);
     if (!fila) return null;
-    if (fila.estado !== 'ENTREGADA' && fila.estado !== 'ANULADA') {
+    if (fila.estado !== 'ANULADA') {
       await this.repo.actualizar(
         fila.id,
         { estado: 'ANULADA', anuladaAt: new Date(), version: fila.version + 1 },
@@ -147,6 +147,100 @@ export class CocinaService {
       });
       return { fila: actualizada, items: await this.repo.itemsDe([id], tx) };
     });
+    return this.mapear(fila, items);
+  }
+
+  /**
+   * RN-22: "Deshacer" en KDS revierte la última transición de comanda si ocurrió hace <= 10 segundos.
+   * Transiciones reversibles:
+   * - EN_PREPARACION -> PENDIENTE (iniciadaAt -> null)
+   * - LISTA -> EN_PREPARACION (listaAt -> null)
+   * - ENTREGADA -> LISTA (entregadaAt -> null)
+   */
+  async deshacer(
+    id: string,
+    version: number | undefined,
+    usuarioId: string,
+  ): Promise<Comanda> {
+    const { fila, items } = await this.db.transaction(async (tx) => {
+      const actual = await this.repo.bloquearPorId(id, tx);
+      if (!actual) throw DomainError.noEncontrado('Comanda no encontrada.');
+      if (version !== undefined && actual.version !== version) {
+        throw new DomainError(
+          CODIGOS_ERROR.VERSION_CONFLICT,
+          'La comanda fue modificada por otro usuario. Recarga e inténtalo de nuevo.',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      let estadoAnterior: EstadoComanda;
+      let timestampTransicion: Date | null;
+      let campoTimestampALimpiar: 'iniciadaAt' | 'listaAt' | 'entregadaAt';
+
+      if (actual.estado === 'EN_PREPARACION') {
+        estadoAnterior = 'PENDIENTE';
+        timestampTransicion = actual.iniciadaAt;
+        campoTimestampALimpiar = 'iniciadaAt';
+      } else if (actual.estado === 'LISTA') {
+        estadoAnterior = 'EN_PREPARACION';
+        timestampTransicion = actual.listaAt;
+        campoTimestampALimpiar = 'listaAt';
+      } else if (actual.estado === 'ENTREGADA') {
+        estadoAnterior = 'LISTA';
+        timestampTransicion = actual.entregadaAt;
+        campoTimestampALimpiar = 'entregadaAt';
+      } else {
+        throw new DomainError(
+          CODIGOS_ERROR.ESTADO_INVALIDO,
+          `No se puede deshacer una comanda en estado ${actual.estado}.`,
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      if (!timestampTransicion) {
+        throw new DomainError(
+          CODIGOS_ERROR.ESTADO_INVALIDO,
+          'No se encontró la marca de tiempo de la última transición para deshacer.',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      const tiempoTranscurridoMs = Date.now() - timestampTransicion.getTime();
+      if (tiempoTranscurridoMs > 10_000) {
+        throw new DomainError(
+          CODIGOS_ERROR.ESTADO_INVALIDO,
+          'El tiempo para deshacer la transición ha expirado (máximo 10 segundos).',
+          HttpStatus.CONFLICT,
+          { tiempoTranscurridoMs },
+        );
+      }
+
+      const actualizada = await this.repo.actualizar(
+        id,
+        {
+          estado: estadoAnterior,
+          [campoTimestampALimpiar]: null,
+          version: actual.version + 1,
+        },
+        tx,
+      );
+
+      await this.eventBus.publicarEnTx(tx, {
+        tipo: 'ComandaDeshecha',
+        modulo: 'cocina',
+        agregadoId: id,
+        usuarioId,
+        payload: {
+          comandaId: id,
+          pedidoId: actualizada.pedidoId,
+          numeroDia: actualizada.numeroDia,
+          estado: estadoAnterior,
+        },
+      });
+
+      return { fila: actualizada, items: await this.repo.itemsDe([id], tx) };
+    });
+
     return this.mapear(fila, items);
   }
 
