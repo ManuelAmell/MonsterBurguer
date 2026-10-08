@@ -1,8 +1,13 @@
-import { Body, Controller, Get, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   configuracionNegocioSchema,
   fechaOperativaSchema,
+  reporteVentasQuerySchema,
+  type AlertasRespuesta,
   type ConfiguracionNegocio,
+  type ReporteVentasQuery,
+  type ReporteVentasRespuesta,
   type UsuarioSesion,
 } from '@mb/shared';
 import { z } from 'zod';
@@ -41,5 +46,31 @@ export class AdministracionController {
     @Body(new ZodPipe(configuracionNegocioSchema)) body: ConfiguracionNegocio,
   ): Promise<ConfiguracionNegocio> {
     return this.admin.guardarConfiguracion(body, usuario.id);
+  }
+
+  @Get('reportes/ventas')
+  async reporteVentas(
+    @Query(new ZodPipe(reporteVentasQuerySchema)) q: ReporteVentasQuery,
+  ): Promise<ReporteVentasRespuesta> {
+    return this.admin.reporteVentas(q);
+  }
+
+  @Get('reportes/ventas.csv')
+  async reporteVentasCsv(
+    @Query(new ZodPipe(reporteVentasQuerySchema)) q: ReporteVentasQuery,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<string> {
+    const csv = await this.admin.reporteVentasCsv(q);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="reporte-ventas-${q.desde}-a-${q.hasta}.csv"`,
+    );
+    return csv;
+  }
+
+  @Get('alertas')
+  async obtenerAlertas(): Promise<AlertasRespuesta> {
+    return this.admin.obtenerAlertas();
   }
 }

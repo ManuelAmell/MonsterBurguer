@@ -1,6 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { desc, lt, sql } from 'drizzle-orm';
-import { fechaOperativa, type ConfiguracionNegocio } from '@mb/shared';
+import {
+  fechaOperativa,
+  type Alerta,
+  type AlertasRespuesta,
+  type ConfiguracionNegocio,
+  type ItemReporteVentas,
+  type ReporteVentasQuery,
+  type ReporteVentasRespuesta,
+  type Unidad,
+} from '@mb/shared';
 import { DB, type Db } from '../../shared-kernel/db/db';
 import { eventoSistema } from '../../shared-kernel/events/evento-sistema.schema';
 import {
@@ -52,6 +61,342 @@ export class AdministracionService {
         monto: Number(t.monto),
       })),
     };
+  }
+
+  async reporteVentas(q: ReporteVentasQuery): Promise<ReporteVentasRespuesta> {
+    const { desde, hasta, agrupar } = q;
+
+    let items: ItemReporteVentas[] = [];
+
+    if (agrupar === 'dia') {
+      const res = await this.db.execute<{
+        clave: string;
+        etiqueta: string;
+        pedidos: number;
+        ventas: string;
+        propinas: string;
+      }>(sql`
+        SELECT clave,
+               etiqueta,
+               sum(pedidos)::int AS pedidos,
+               sum(ventas)::bigint AS ventas,
+               sum(propinas)::bigint AS propinas
+        FROM v_reporte_ventas_dia
+        WHERE fecha_operativa BETWEEN ${desde} AND ${hasta}
+        GROUP BY clave, etiqueta
+        ORDER BY clave ASC
+      `);
+      items = res.rows.map((r) => {
+        const pedidos = Number(r.pedidos);
+        const ventas = Number(r.ventas);
+        const propinas = Number(r.propinas);
+        return {
+          clave: r.clave,
+          etiqueta: r.etiqueta,
+          pedidos,
+          ventas,
+          propinas,
+          ticketPromedio: pedidos > 0 ? Math.round(ventas / pedidos) : 0,
+        };
+      });
+    } else if (agrupar === 'producto') {
+      const res = await this.db.execute<{
+        clave: string;
+        etiqueta: string;
+        pedidos: number;
+        ventas: string;
+        propinas: string;
+        unidades: string;
+      }>(sql`
+        SELECT clave,
+               etiqueta,
+               sum(pedidos)::int AS pedidos,
+               sum(ventas)::bigint AS ventas,
+               0::bigint AS propinas,
+               sum(unidades)::bigint AS unidades
+        FROM v_reporte_ventas_producto
+        WHERE fecha_operativa BETWEEN ${desde} AND ${hasta}
+        GROUP BY clave, etiqueta
+        ORDER BY ventas DESC, unidades DESC
+      `);
+      items = res.rows.map((r) => {
+        const pedidos = Number(r.pedidos);
+        const ventas = Number(r.ventas);
+        const unidades = Number(r.unidades);
+        return {
+          clave: r.clave,
+          etiqueta: r.etiqueta,
+          pedidos,
+          ventas,
+          propinas: 0,
+          unidades,
+          ticketPromedio: pedidos > 0 ? Math.round(ventas / pedidos) : 0,
+        };
+      });
+    } else if (agrupar === 'metodo') {
+      const res = await this.db.execute<{
+        clave: string;
+        etiqueta: string;
+        pedidos: number;
+        ventas: string;
+        propinas: string;
+      }>(sql`
+        SELECT clave,
+               etiqueta,
+               sum(pedidos)::int AS pedidos,
+               sum(ventas)::bigint AS ventas,
+               sum(propinas)::bigint AS propinas
+        FROM v_reporte_ventas_metodo
+        WHERE fecha_operativa BETWEEN ${desde} AND ${hasta}
+        GROUP BY clave, etiqueta
+        ORDER BY ventas DESC
+      `);
+      items = res.rows.map((r) => {
+        const pedidos = Number(r.pedidos);
+        const ventas = Number(r.ventas);
+        const propinas = Number(r.propinas);
+        return {
+          clave: r.clave,
+          etiqueta: r.etiqueta,
+          pedidos,
+          ventas,
+          propinas,
+          ticketPromedio: pedidos > 0 ? Math.round(ventas / pedidos) : 0,
+        };
+      });
+    } else if (agrupar === 'cajero') {
+      const res = await this.db.execute<{
+        clave: string;
+        etiqueta: string;
+        pedidos: number;
+        ventas: string;
+        propinas: string;
+      }>(sql`
+        SELECT clave,
+               etiqueta,
+               sum(pedidos)::int AS pedidos,
+               sum(ventas)::bigint AS ventas,
+               sum(propinas)::bigint AS propinas
+        FROM v_reporte_ventas_cajero
+        WHERE fecha_operativa BETWEEN ${desde} AND ${hasta}
+        GROUP BY clave, etiqueta
+        ORDER BY ventas DESC
+      `);
+      items = res.rows.map((r) => {
+        const pedidos = Number(r.pedidos);
+        const ventas = Number(r.ventas);
+        const propinas = Number(r.propinas);
+        return {
+          clave: r.clave,
+          etiqueta: r.etiqueta,
+          pedidos,
+          ventas,
+          propinas,
+          ticketPromedio: pedidos > 0 ? Math.round(ventas / pedidos) : 0,
+        };
+      });
+    }
+
+    // Totales del rango
+    const totalesRes = await this.db.execute<{
+      pedidos: number;
+      ventas: string;
+      propinas: string;
+    }>(sql`
+      SELECT coalesce(sum(pedidos), 0)::int AS pedidos,
+             coalesce(sum(ventas), 0)::bigint AS ventas,
+             coalesce(sum(propinas), 0)::bigint AS propinas
+      FROM v_reporte_ventas_dia
+      WHERE fecha_operativa BETWEEN ${desde} AND ${hasta}
+    `);
+    const totRow = totalesRes.rows[0];
+    const totPedidos = Number(totRow?.pedidos ?? 0);
+    const totVentas = Number(totRow?.ventas ?? 0);
+    const totPropinas = Number(totRow?.propinas ?? 0);
+    const totTicket = totPedidos > 0 ? Math.round(totVentas / totPedidos) : 0;
+
+    const anuladosRes = await this.db.execute<{
+      pedidos: number;
+      monto: string;
+    }>(sql`
+      SELECT coalesce(sum(pedidos), 0)::int AS pedidos,
+             coalesce(sum(monto), 0)::bigint AS monto
+      FROM v_reporte_pedidos_anulados
+      WHERE fecha_operativa BETWEEN ${desde} AND ${hasta}
+    `);
+    const anuladosRow = anuladosRes.rows[0];
+    const anuladosCantidad = Number(anuladosRow?.pedidos ?? 0);
+    const anuladosMonto = Number(anuladosRow?.monto ?? 0);
+
+    let totUnidades: number | undefined;
+    if (agrupar === 'producto') {
+      const unidadesRes = await this.db.execute<{
+        unidades: string;
+      }>(sql`
+        SELECT coalesce(sum(unidades), 0)::bigint AS unidades
+        FROM v_reporte_ventas_producto
+        WHERE fecha_operativa BETWEEN ${desde} AND ${hasta}
+      `);
+      totUnidades = Number(unidadesRes.rows[0]?.unidades ?? 0);
+    }
+
+    return {
+      desde,
+      hasta,
+      agrupar,
+      items,
+      totales: {
+        pedidos: totPedidos,
+        ventas: totVentas,
+        propinas: totPropinas,
+        ticketPromedio: totTicket,
+        unidades: totUnidades,
+        anulados: {
+          cantidad: anuladosCantidad,
+          monto: anuladosMonto,
+        },
+      },
+    };
+  }
+
+  async reporteVentasCsv(q: ReporteVentasQuery): Promise<string> {
+    const data = await this.reporteVentas(q);
+    const lineas: string[] = [];
+
+    const escapar = (s: string) => {
+      if (s.includes(';') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+
+    if (data.agrupar === 'dia') {
+      lineas.push('Fecha;Pedidos;Ventas;Propinas;Ticket Promedio');
+      for (const item of data.items) {
+        lineas.push(`${escapar(item.etiqueta)};${item.pedidos};${item.ventas};${item.propinas};${item.ticketPromedio}`);
+      }
+      lineas.push(`TOTAL;${data.totales.pedidos};${data.totales.ventas};${data.totales.propinas};${data.totales.ticketPromedio}`);
+    } else if (data.agrupar === 'producto') {
+      lineas.push('Producto;Pedidos;Unidades;Ventas;Ticket Promedio');
+      for (const item of data.items) {
+        lineas.push(`${escapar(item.etiqueta)};${item.pedidos};${item.unidades ?? 0};${item.ventas};${item.ticketPromedio}`);
+      }
+      lineas.push(`TOTAL;${data.totales.pedidos};${data.totales.unidades ?? 0};${data.totales.ventas};${data.totales.ticketPromedio}`);
+    } else if (data.agrupar === 'metodo') {
+      lineas.push('Método de Pago;Pedidos;Ventas;Propinas;Ticket Promedio');
+      for (const item of data.items) {
+        lineas.push(`${escapar(item.etiqueta)};${item.pedidos};${item.ventas};${item.propinas};${item.ticketPromedio}`);
+      }
+      lineas.push(`TOTAL;${data.totales.pedidos};${data.totales.ventas};${data.totales.propinas};${data.totales.ticketPromedio}`);
+    } else if (data.agrupar === 'cajero') {
+      lineas.push('Cajero;Pedidos;Ventas;Propinas;Ticket Promedio');
+      for (const item of data.items) {
+        lineas.push(`${escapar(item.etiqueta)};${item.pedidos};${item.ventas};${item.propinas};${item.ticketPromedio}`);
+      }
+      lineas.push(`TOTAL;${data.totales.pedidos};${data.totales.ventas};${data.totales.propinas};${data.totales.ticketPromedio}`);
+    }
+
+    if (data.totales.anulados.cantidad > 0) {
+      lineas.push('');
+      lineas.push(`Pedidos Anulados;${data.totales.anulados.cantidad}`);
+      lineas.push(`Monto Anulado;${data.totales.anulados.monto}`);
+    }
+
+    // UTF-8 BOM (\uFEFF) para compatibilidad con Microsoft Excel
+    return `\uFEFF${lineas.join('\r\n')}`;
+  }
+
+  async obtenerAlertas(): Promise<AlertasRespuesta> {
+    const items: Alerta[] = [];
+
+    // 1. Pedidos olvidados (> 12 h sin actividad) (RN-17)
+    const olvidadosRes = await this.db.execute<{
+      pedido_id: string;
+      numero_dia: number;
+      mesa_nombre: string | null;
+      abierto_desde: Date;
+    }>(sql`
+      SELECT pedido_id, numero_dia, mesa_nombre, abierto_desde
+      FROM v_pedidos_olvidados
+      ORDER BY abierto_desde ASC
+    `);
+    for (const r of olvidadosRes.rows) {
+      items.push({
+        tipo: 'PEDIDO_OLVIDADO',
+        severidad: 'ADVERTENCIA',
+        entidadId: r.pedido_id,
+        datos: {
+          pedidoId: r.pedido_id,
+          numeroDia: Number(r.numero_dia),
+          mesaNombre: r.mesa_nombre ?? null,
+          abiertoDesde: new Date(r.abierto_desde).toISOString(),
+        },
+      });
+    }
+
+    // 2. Ingredientes bajo mínimo y agotados (RN-36)
+    const stockRes = await this.db.execute<{
+      ingrediente_id: string;
+      nombre: string;
+      unidad: string;
+      stock_actual: string;
+      stock_minimo: string;
+      agotado: boolean;
+    }>(sql`
+      SELECT ingrediente_id, nombre, unidad, stock_actual, stock_minimo, agotado
+      FROM v_stock_alertas
+      ORDER BY agotado DESC, nombre ASC
+    `);
+    for (const r of stockRes.rows) {
+      if (r.agotado) {
+        items.push({
+          tipo: 'INGREDIENTE_AGOTADO',
+          severidad: 'CRITICA',
+          entidadId: r.ingrediente_id,
+          datos: {
+            ingredienteId: r.ingrediente_id,
+            nombre: r.nombre,
+            unidad: r.unidad as Unidad,
+          },
+        });
+      } else {
+        items.push({
+          tipo: 'INGREDIENTE_BAJO_MINIMO',
+          severidad: 'ADVERTENCIA',
+          entidadId: r.ingrediente_id,
+          datos: {
+            ingredienteId: r.ingrediente_id,
+            nombre: r.nombre,
+            stockActual: Number(r.stock_actual),
+            stockMinimo: Number(r.stock_minimo),
+            unidad: r.unidad as Unidad,
+          },
+        });
+      }
+    }
+
+    // 3. Productos agotados
+    const prodRes = await this.db.execute<{
+      producto_id: string;
+      nombre: string;
+    }>(sql`
+      SELECT producto_id, nombre
+      FROM v_productos_agotados
+      ORDER BY nombre ASC
+    `);
+    for (const r of prodRes.rows) {
+      items.push({
+        tipo: 'PRODUCTO_AGOTADO',
+        severidad: 'CRITICA',
+        entidadId: r.producto_id,
+        datos: {
+          productoId: r.producto_id,
+          nombre: r.nombre,
+        },
+      });
+    }
+
+    return { items };
   }
 
   async eventos(cursor?: string) {
