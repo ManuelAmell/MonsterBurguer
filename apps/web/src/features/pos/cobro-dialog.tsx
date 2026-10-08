@@ -55,7 +55,7 @@ interface Props {
   onCobrado: (resultado: CobroExitoso) => void;
 }
 
-const MAX_LINEAS = 1; // el backend exige exactamente 1 pago por cobro
+const MAX_LINEAS = 3;
 
 /**
  * Cobro (DESIGN §7.3, RN-06, RN-42, RN-43). Se monta solo mientras está abierto: cada apertura
@@ -86,21 +86,10 @@ export function CobroDialog({ pedido, onCerrar, onCobrado }: Props) {
   const propinaElegida = !esMesa || propinaOpcion !== null;
   const aPagar = pedido.total + propina;
 
-  // Montos por línea: con varias líneas, la última toma el saldo restante.
+  // Montos por línea: con 1 línea es el total; con varias líneas cada línea es editable
   const montos = useMemo(() => {
     if (lineas.length === 1) return [aPagar];
-    const resultado: number[] = [];
-    let acumulado = 0;
-    lineas.forEach((linea, i) => {
-      if (i === lineas.length - 1) {
-        resultado.push(Math.max(aPagar - acumulado, 0));
-      } else {
-        const m = digitosAPesos(campos[`${linea.id}:monto`] ?? '');
-        resultado.push(m);
-        acumulado += m;
-      }
-    });
-    return resultado;
+    return lineas.map((linea) => digitosAPesos(campos[`${linea.id}:monto`] ?? ''));
   }, [lineas, campos, aPagar]);
 
   const sumaPagos = montos.reduce((a, b) => a + b, 0);
@@ -115,7 +104,11 @@ export function CobroDialog({ pedido, onCerrar, onCobrado }: Props) {
 
   const claveActiva =
     activo ??
-    (efectivo ? `${efectivo.linea.id}:recibido` : lineas.length > 1 ? `${lineas[0]?.id}:monto` : null);
+    (lineas.length > 1
+      ? `${lineas[0]?.id}:monto`
+      : efectivo
+        ? `${efectivo.linea.id}:recibido`
+        : null);
 
   function editarCampo(fn: (actual: string) => string) {
     if (!claveActiva) return;
@@ -131,15 +124,42 @@ export function CobroDialog({ pedido, onCerrar, onCobrado }: Props) {
   }
 
   function agregarLinea() {
+    if (lineas.length >= MAX_LINEAS) return;
     const usados = new Set(lineas.map((l) => l.metodo));
     const libre = METODOS_PAGO.find((m) => !usados.has(m)) ?? 'TARJETA';
-    setLineas((prev) => [...prev, { id: uuid(), metodo: libre }]);
-    setActivo(null);
+    const nuevaId = uuid();
+
+    setLineas((prev) => [...prev, { id: nuevaId, metodo: libre }]);
+
+    // Si pasamos de 1 a 2 líneas, dejamos activa la primera para que el cajero digite su valor
+    if (lineas.length === 1) {
+      setActivo(`${lineas[0]!.id}:monto`);
+    } else {
+      setActivo(`${nuevaId}:monto`);
+    }
   }
 
   function quitarLinea(id: string) {
     setLineas((prev) => prev.filter((l) => l.id !== id));
+    setCampos((prev) => {
+      const nuevo = { ...prev };
+      delete nuevo[`${id}:monto`];
+      delete nuevo[`${id}:recibido`];
+      delete nuevo[`${id}:ref`];
+      return nuevo;
+    });
     setActivo(null);
+  }
+
+  function asignarRestoALinea(lineaId: string) {
+    if (restante <= 0) return;
+    const montoActual = digitosAPesos(campos[`${lineaId}:monto`] ?? '');
+    const nuevoMonto = montoActual + restante;
+    setCampos((prev) => ({
+      ...prev,
+      [`${lineaId}:monto`]: String(nuevoMonto),
+    }));
+    setActivo(`${lineaId}:monto`);
   }
 
   const pagos = detalle.map(({ linea, monto, recibido }) => {
@@ -288,8 +308,6 @@ export function CobroDialog({ pedido, onCerrar, onCobrado }: Props) {
 
               <div className="flex flex-col gap-4">
                 {detalle.map(({ linea, monto, recibido }, i) => {
-                  const esUltima = i === lineas.length - 1;
-                  const montoEditable = lineas.length > 1 && !esUltima;
                   return (
                     <fieldset key={linea.id} className="flex flex-col gap-3 rounded-lg border p-3">
                       <legend className="px-1 text-sm font-semibold">
@@ -330,20 +348,31 @@ export function CobroDialog({ pedido, onCerrar, onCobrado }: Props) {
                         )}
                       </div>
 
-                      {lineas.length > 1 &&
-                        (montoEditable ? (
-                          <CampoMonto
-                            etiqueta={t.pos.cobro.monto}
-                            valor={monto}
-                            activo={claveActiva === `${linea.id}:monto`}
-                            onActivar={() => setActivo(`${linea.id}:monto`)}
-                          />
-                        ) : (
-                          <div className="flex items-baseline justify-between text-sm">
-                            <span className="text-muted-foreground">{t.pos.cobro.monto}</span>
-                            <span className="tabular text-lg font-bold">{formatearCOP(monto)}</span>
+                      {lineas.length > 1 && (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                              <CampoMonto
+                                etiqueta={t.pos.cobro.monto}
+                                valor={monto}
+                                activo={claveActiva === `${linea.id}:monto`}
+                                onActivar={() => setActivo(`${linea.id}:monto`)}
+                              />
+                            </div>
+                            {restante > 0 && (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className="h-14 shrink-0 font-semibold text-xs sm:text-sm px-3"
+                                onClick={() => asignarRestoALinea(linea.id)}
+                              >
+                                {t.pos.cobro.restoEn(t.pos.cobro.metodos[linea.metodo])}
+                              </Button>
+                            )}
                           </div>
-                        ))}
+                        </div>
+                      )}
 
                       {linea.metodo === 'EFECTIVO' ? (
                         <CampoMonto
@@ -371,8 +400,8 @@ export function CobroDialog({ pedido, onCerrar, onCobrado }: Props) {
                 })}
 
                 {lineas.length < MAX_LINEAS && (
-                  <Button type="button" variant="outline" onClick={agregarLinea} className="self-start">
-                    <Plus aria-hidden="true" />
+                  <Button type="button" variant="outline" onClick={agregarLinea} className="self-start gap-1.5 font-semibold">
+                    <Plus aria-hidden="true" className="size-4" />
                     {t.pos.cobro.agregarMetodo}
                   </Button>
                 )}
@@ -422,21 +451,61 @@ export function CobroDialog({ pedido, onCerrar, onCobrado }: Props) {
               )}
 
               {lineas.length > 1 && (
-                <p
+                <div
                   className={cn(
-                    'flex items-center gap-1.5 text-sm font-medium',
-                    restante === 0 ? 'text-success' : 'text-destructive',
+                    'rounded-lg border p-4 flex flex-col gap-2.5',
+                    restante === 0
+                      ? 'border-success/40 bg-success/10'
+                      : restante > 0
+                        ? 'border-amber-500/40 bg-amber-500/10'
+                        : 'border-destructive/40 bg-destructive/10',
                   )}
                 >
-                  {restante === 0 ? (
-                    <BadgeCheck aria-hidden="true" className="size-4" />
-                  ) : (
-                    <AlertCircle aria-hidden="true" className="size-4" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold flex items-center gap-1.5">
+                      {restante === 0 ? (
+                        <BadgeCheck aria-hidden="true" className="size-4 text-success" />
+                      ) : (
+                        <AlertCircle aria-hidden="true" className="size-4" />
+                      )}
+                      {restante === 0
+                        ? t.pos.cobro.cuadra
+                        : restante > 0
+                          ? t.pos.cobro.pendiente
+                          : t.pos.cobro.sobra}
+                    </span>
+                    <span
+                      aria-live="polite"
+                      className={cn(
+                        'tabular font-display text-xl font-extrabold',
+                        restante === 0
+                          ? 'text-success'
+                          : restante > 0
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-destructive',
+                      )}
+                    >
+                      {formatearCOP(Math.abs(restante))}
+                    </span>
+                  </div>
+
+                  {restante > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border/50">
+                      {lineas.map((l) => (
+                        <Button
+                          key={l.id}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs font-semibold"
+                          onClick={() => asignarRestoALinea(l.id)}
+                        >
+                          {t.pos.cobro.restoEn(t.pos.cobro.metodos[l.metodo])}
+                        </Button>
+                      ))}
+                    </div>
                   )}
-                  {restante === 0
-                    ? t.pos.cobro.cuadra
-                    : `${restante > 0 ? t.pos.cobro.pendiente : t.pos.cobro.sobra}: ${formatearCOP(Math.abs(restante))}`}
-                </p>
+                </div>
               )}
             </div>
 

@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownToLine, Boxes, Loader2, Trash } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import {
@@ -33,9 +33,27 @@ import { t } from '@/i18n/es';
 import { api } from '@/lib/api';
 import { ariaCampo, Campo, CabeceraPagina, EstadoError, PaginaAdmin, TablaSkeleton } from './components/campos';
 import { aEntero, formatearCantidad, manejarErrorMutacion } from './lib';
-import { useIngredientes } from './productos-page';
 
 const ti = t.admin.inventario;
+
+interface Pagina<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+export function useIngredientesInfinito(limit = 50) {
+  return useInfiniteQuery<Pagina<Ingrediente>>({
+    queryKey: ['ingredientes', 'infinito', limit],
+    queryFn: ({ pageParam }) => {
+      const url = pageParam
+        ? `/ingredientes?limit=${limit}&cursor=${encodeURIComponent(pageParam as string)}`
+        : `/ingredientes?limit=${limit}`;
+      return api<Pagina<Ingrediente>>(url);
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+}
 
 type Operacion = { tipo: 'entrada' | 'merma'; ingrediente: Ingrediente };
 
@@ -50,21 +68,25 @@ function useInvalidarStock() {
 }
 
 export function InventarioPage() {
-  const ingredientes = useIngredientes();
+  const query = useIngredientesInfinito();
   const [operacion, setOperacion] = useState<Operacion | null>(null);
+
+  const items = useMemo(() => {
+    return query.data?.pages.flatMap((p) => p.items) ?? [];
+  }, [query.data]);
 
   return (
     <PaginaAdmin>
       <CabeceraPagina titulo={ti.titulo} descripcion={ti.descripcion} />
 
-      {ingredientes.isPending ? (
+      {query.isPending ? (
         <TablaSkeleton />
-      ) : ingredientes.isError ? (
+      ) : query.isError ? (
         <EstadoError
-          onReintentar={() => void ingredientes.refetch()}
-          reintentando={ingredientes.isFetching}
+          onReintentar={() => void query.refetch()}
+          reintentando={query.isFetching}
         />
-      ) : ingredientes.data.items.length === 0 ? (
+      ) : items.length === 0 ? (
         <EmptyState icon={Boxes} titulo={ti.vacioTitulo} descripcion={ti.vacioDescripcion} />
       ) : (
         <div className="rounded-lg border bg-card">
@@ -81,7 +103,7 @@ export function InventarioPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {ingredientes.data.items.map((i) => (
+              {items.map((i) => (
                 <TableRow key={i.id}>
                   <TableCell className="font-medium">{i.nombre}</TableCell>
                   <TableCell>
@@ -111,6 +133,27 @@ export function InventarioPage() {
               ))}
             </TableBody>
           </Table>
+          {query.hasNextPage && (
+            <div className="flex justify-center border-t p-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void query.fetchNextPage()}
+                disabled={query.isFetchingNextPage}
+                className="h-12 min-h-12 gap-2 font-semibold"
+                aria-label={t.admin.comun.cargarMas}
+              >
+                {query.isFetchingNextPage ? (
+                  <>
+                    <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+                    {t.admin.comun.cargandoMas}
+                  </>
+                ) : (
+                  t.admin.comun.cargarMas
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

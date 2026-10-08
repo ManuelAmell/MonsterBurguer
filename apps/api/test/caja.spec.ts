@@ -7,6 +7,7 @@ import { fechaOperativa } from '@mb/shared';
 import type {
   ApiErrorBody,
   MovimientoCaja,
+  Pedido,
   ResumenCierre,
   SesionCaja,
   SesionCajaDetalle,
@@ -14,8 +15,10 @@ import type {
 } from '@mb/shared';
 import { crearApp } from '../src/app.factory';
 import { cargarEnv } from '../src/config/env';
+import { categoria, producto } from '../src/modules/catalogo/catalogo.schema';
 import { DB, type Db } from '../src/shared-kernel/db/db';
 import { eventoSistema } from '../src/shared-kernel/events/evento-sistema.schema';
+import { nuevoId } from '../src/shared-kernel/ids';
 import { crearUsuario, DATABASE_URL_TEST, prepararBaseDeTest } from './helpers/test-db';
 
 const ORIGEN = 'http://localhost:5201';
@@ -29,6 +32,7 @@ describe.skipIf(!DATABASE_URL_TEST)('módulo caja: movimientos manuales, cierre 
   let cookieCajero2: string;
   let idCajero1: string;
   let idCajero2: string;
+  let prodClasicaId: string;
 
   beforeAll(async () => {
     const url = DATABASE_URL_TEST as string;
@@ -57,6 +61,19 @@ describe.skipIf(!DATABASE_URL_TEST)('módulo caja: movimientos manuales, cierre 
     cookieAdmin = await login('admin', 'admin123');
     cookieCajero1 = await login('cajero1', 'caja1234');
     cookieCajero2 = await login('cajero2', 'caja1234');
+
+    const catId = nuevoId();
+    await db.insert(categoria).values({ id: catId, nombre: 'Hamburguesas', orden: 1, activa: true });
+    prodClasicaId = nuevoId();
+    await db.insert(producto).values({
+      id: prodClasicaId,
+      categoriaId: catId,
+      nombre: 'Monster Clásica',
+      precio: 20000,
+      orden: 1,
+      activo: true,
+      agotado: false,
+    });
   });
 
   afterAll(async () => {
@@ -342,6 +359,174 @@ describe.skipIf(!DATABASE_URL_TEST)('módulo caja: movimientos manuales, cierre 
       expect(res.status).toBe(200);
       const detalle = (await res.json()) as SesionCajaDetalle;
       expect(detalle.id).toBe(sesionCajero2Id);
+    });
+  });
+
+  describe('RN-42, RN-43: Cobro con pagos mixtos', () => {
+    let sesionCobroId: string;
+
+    beforeAll(async () => {
+      const res = await post('/caja/sesiones', { montoApertura: 50000 }, cookieCajero1);
+      const s = (await res.json()) as SesionCaja;
+      sesionCobroId = s.id;
+    });
+
+    it('RN-42: cobro mixto (efectivo + tarjeta) cuadra y deja recibo con 2 pagos y desglose', async () => {
+      const pedRes = await post('/pedidos', { tipo: 'LLEVAR' }, cookieCajero1);
+      const ped = (await pedRes.json()) as Pedido;
+      await post(`/pedidos/${ped.id}/items`, { productoId: prodClasicaId, cantidad: 1 }, cookieCajero1);
+
+      const cobroRes = await post(
+        '/caja/cobros',
+        {
+          pedidoId: ped.id,
+          pedidoVersion: 1,
+          propina: 2000,
+          pagos: [
+            { metodo: 'EFECTIVO', monto: 10000, recibido: 15000 },
+            { metodo: 'TARJETA', monto: 12000, referencia: 'VOUCHER-123' },
+          ],
+        },
+        cookieCajero1,
+      );
+      expect(cobroRes.status).toBe(201);
+      const dataCobro = (await cobroRes.json()) as {
+        reciboId: string;
+        numero: string;
+        total: number;
+        propina: number;
+        cambio: number;
+      };
+      expect(dataCobro.total).toBe(20000);
+      expect(dataCobro.propina).toBe(2000);
+      expect(dataCobro.cambio).toBe(5000);
+
+      const reciboRes = await get(`/recibos/${dataCobro.reciboId}`, cookieCajero1);
+      expect(reciboRes.status).toBe(200);
+      const rec = (await reciboRes.json()) as {
+        pagos: Array<{ metodo: string; monto: number; recibido: number | null; cambio: number | null; referencia: string | null }>;
+        cambio: number;
+      };
+      expect(rec.pagos).toHaveLength(2);
+      expect(rec.pagos).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ metodo: 'EFECTIVO', monto: 10000, recibido: 15000, cambio: 5000 }),
+          expect.objectContaining({ metodo: 'TARJETA', monto: 12000, referencia: 'VOUCHER-123' }),
+        ]),
+      );
+      expect(rec.cambio).toBe(5000);
+    });
+
+    it('RN-43: rechaza cobro cuando la suma de pagos no coincide con total + propina (409 PAGOS_NO_CUADRAN)', async () => {
+      const pedRes = await post('/pedidos', { tipo: 'LLEVAR' }, cookieCajero1);
+      const ped = (await pedRes.json()) as Pedido;
+      await post(`/pedidos/${ped.id}/items`, { productoId: prodClasicaId, cantidad: 1 }, cookieCajero1);
+
+      const cobroRes = await post(
+        '/caja/cobros',
+        {
+          pedidoId: ped.id,
+          pedidoVersion: 1,
+          propina: 0,
+          pagos: [
+            { metodo: 'EFECTIVO', monto: 10000, recibido: 10000 },
+            { metodo: 'TARJETA', monto: 9000 },
+          ],
+        },
+        cookieCajero1,
+      );
+      expect(cobroRes.status).toBe(409);
+      const err = (await cobroRes.json()) as ApiErrorBody;
+      expect(err.codigo).toBe('PAGOS_NO_CUADRAN');
+    });
+
+    it('RN-43: rechaza cobro con más de un pago en efectivo (400 VALIDACION)', async () => {
+      const pedRes = await post('/pedidos', { tipo: 'LLEVAR' }, cookieCajero1);
+      const ped = (await pedRes.json()) as Pedido;
+      await post(`/pedidos/${ped.id}/items`, { productoId: prodClasicaId, cantidad: 1 }, cookieCajero1);
+
+      const cobroRes = await post(
+        '/caja/cobros',
+        {
+          pedidoId: ped.id,
+          pedidoVersion: 1,
+          propina: 0,
+          pagos: [
+            { metodo: 'EFECTIVO', monto: 10000, recibido: 10000 },
+            { metodo: 'EFECTIVO', monto: 10000, recibido: 10000 },
+          ],
+        },
+        cookieCajero1,
+      );
+      expect(cobroRes.status).toBe(400);
+    });
+
+    it('RN-42: rechaza cobro con métodos de pago repetidos (400 VALIDACION)', async () => {
+      const pedRes = await post('/pedidos', { tipo: 'LLEVAR' }, cookieCajero1);
+      const ped = (await pedRes.json()) as Pedido;
+      await post(`/pedidos/${ped.id}/items`, { productoId: prodClasicaId, cantidad: 1 }, cookieCajero1);
+
+      const cobroRes = await post(
+        '/caja/cobros',
+        {
+          pedidoId: ped.id,
+          pedidoVersion: 1,
+          propina: 0,
+          pagos: [
+            { metodo: 'TARJETA', monto: 10000 },
+            { metodo: 'TARJETA', monto: 10000 },
+          ],
+        },
+        cookieCajero1,
+      );
+      expect(cobroRes.status).toBe(400);
+    });
+
+    it('RN-42: rechaza cobro con más de 3 pagos (400 VALIDACION)', async () => {
+      const pedRes = await post('/pedidos', { tipo: 'LLEVAR' }, cookieCajero1);
+      const ped = (await pedRes.json()) as Pedido;
+      await post(`/pedidos/${ped.id}/items`, { productoId: prodClasicaId, cantidad: 1 }, cookieCajero1);
+
+      const cobroRes = await post(
+        '/caja/cobros',
+        {
+          pedidoId: ped.id,
+          pedidoVersion: 1,
+          propina: 0,
+          pagos: [
+            { metodo: 'EFECTIVO', monto: 5000, recibido: 5000 },
+            { metodo: 'TARJETA', monto: 5000 },
+            { metodo: 'TRANSFERENCIA', monto: 5000 },
+            { metodo: 'TARJETA', monto: 5000 },
+          ],
+        },
+        cookieCajero1,
+      );
+      expect(cobroRes.status).toBe(400);
+    });
+
+    it('RN-47: cierre de caja cuenta SOLO la porción en efectivo en el efectivo esperado', async () => {
+      const resDetalle = await get(`/caja/sesiones/${sesionCobroId}`, cookieCajero1);
+      expect(resDetalle.status).toBe(200);
+      const detalle = (await resDetalle.json()) as SesionCajaDetalle;
+      expect(detalle.totalesPorMetodo).toEqual({
+        efectivo: 10000,
+        tarjeta: 12000,
+        transferencia: 0,
+      });
+      // Base: 50.000 + Ventas efectivo: 10.000 = 60.000
+      expect(detalle.efectivoEsperado).toBe(60000);
+
+      const cierreRes = await post(
+        `/caja/sesiones/${sesionCobroId}/cerrar`,
+        { efectivoContado: 60000 },
+        cookieCajero1,
+      );
+      expect(cierreRes.status).toBe(200);
+      const resumen = (await cierreRes.json()) as ResumenCierre;
+      expect(resumen.ventasEfectivo).toBe(10000);
+      expect(resumen.efectivoEsperado).toBe(60000);
+      expect(resumen.diferencia).toBe(0);
     });
   });
 });

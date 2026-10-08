@@ -318,12 +318,20 @@ describe.skipIf(!DATABASE_URL_TEST)('Reportes de Ventas y Alertas (ADMIN)', () =
       regimenTributario: 'NO_RESPONSABLE',
       propina: 6000,
     });
-    await db.insert(pago).values({
-      id: nuevoId(),
-      reciboId: rec3Id,
-      metodo: 'TRANSFERENCIA',
-      monto: 65800,
-    });
+    await db.insert(pago).values([
+      {
+        id: nuevoId(),
+        reciboId: rec3Id,
+        metodo: 'TRANSFERENCIA',
+        monto: 40000,
+      },
+      {
+        id: nuevoId(),
+        reciboId: rec3Id,
+        metodo: 'TARJETA',
+        monto: 25800,
+      },
+    ]);
 
     // 8. Pedido Anulado del día 2026-10-07 (monto $20.000)
     const pedAnuladoId = nuevoId();
@@ -454,7 +462,7 @@ describe.skipIf(!DATABASE_URL_TEST)('Reportes de Ventas y Alertas (ADMIN)', () =
       expect(data.totales.ventas).toBe(144500); // 74700 + 69800 = 144500
     });
 
-    it('agrupa por MÉTODO y las ventas más propinas cuadran con los pagos', async () => {
+    it('agrupa por MÉTODO con pago mixto: sin duplicar ventas ni propinas y con desglose exacto', async () => {
       const res = await get('/admin/reportes/ventas?desde=2026-10-06&hasta=2026-10-07&agrupar=metodo', cookieAdmin);
       expect(res.status).toBe(200);
       const data = (await res.json()) as ReporteVentasRespuesta;
@@ -466,23 +474,27 @@ describe.skipIf(!DATABASE_URL_TEST)('Reportes de Ventas y Alertas (ADMIN)', () =
       expect(ef?.ventas).toBe(49800);
       expect(ef?.propinas).toBe(5000);
       expect(ef?.pedidos).toBe(1);
+      expect(ef?.cobrado).toBe(54800);
 
       const tj = data.items.find((i) => i.clave === 'TARJETA');
-      expect(tj?.ventas).toBe(34900);
-      expect(tj?.propinas).toBe(0);
-      expect(tj?.pedidos).toBe(1);
+      expect(tj?.ventas).toBe(58348); // 34900 (ped2) + 23448 (ped3)
+      expect(tj?.propinas).toBe(2352);
+      expect(tj?.pedidos).toBe(2);
+      expect(tj?.cobrado).toBe(60700); // 34900 + 25800
 
       const tr = data.items.find((i) => i.clave === 'TRANSFERENCIA');
-      expect(tr?.ventas).toBe(59800);
-      expect(tr?.propinas).toBe(6000);
+      expect(tr?.ventas).toBe(36352); // ped3
+      expect(tr?.propinas).toBe(3648);
       expect(tr?.pedidos).toBe(1);
+      expect(tr?.cobrado).toBe(40000);
 
-      // Suma por método cuadra con totales
+      // Suma por método cuadra con totales sin duplicar
       const sumaVentas = data.items.reduce((acc, i) => acc + i.ventas, 0);
       const sumaPropinas = data.items.reduce((acc, i) => acc + i.propinas, 0);
       expect(sumaVentas).toBe(144500);
       expect(sumaPropinas).toBe(11000);
       expect(sumaVentas + sumaPropinas).toBe(155500); // Total de pagos registrados
+      expect(data.totales.cobrado).toBe(155500);
     });
 
     it('agrupa por CAJERO y cuadra con los pedidos cobrados', async () => {
@@ -533,6 +545,14 @@ describe.skipIf(!DATABASE_URL_TEST)('Reportes de Ventas y Alertas (ADMIN)', () =
       expect(text).toContain('TOTAL;3;144500;11000;48167');
       expect(text).toContain('Pedidos Anulados;1');
       expect(text).toContain('Monto Anulado;20000');
+    });
+
+    it('genera archivo CSV para agrupar=metodo incluyendo columna Cobrado', async () => {
+      const res = await get('/admin/reportes/ventas.csv?desde=2026-10-06&hasta=2026-10-07&agrupar=metodo', cookieAdmin);
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      expect(text).toContain('Método de Pago;Pedidos;Ventas;Propinas;Cobrado;Ticket Promedio');
+      expect(text).toContain('TOTAL;3;144500;11000;155500;48167');
     });
   });
 

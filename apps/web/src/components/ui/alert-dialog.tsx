@@ -2,21 +2,25 @@ import { Slot } from '@radix-ui/react-slot';
 import {
   createContext,
   useContext,
-  useEffect,
+  useId,
+  useRef,
   useState,
   type ComponentProps,
   type Dispatch,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
   type SetStateAction,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { buttonVariants } from '@/components/ui/button';
+import { useFocusTrap } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 interface AlertDialogContextValue {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
+  titleId: string;
 }
 
 const AlertDialogContext = createContext<AlertDialogContextValue | null>(null);
@@ -37,6 +41,7 @@ export function AlertDialog({
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const titleId = useId();
 
   const setOpen: Dispatch<SetStateAction<boolean>> = (value) => {
     const nextOpen = typeof value === 'function' ? value(open) : value;
@@ -47,7 +52,7 @@ export function AlertDialog({
   };
 
   return (
-    <AlertDialogContext.Provider value={{ open, setOpen }}>
+    <AlertDialogContext.Provider value={{ open, setOpen, titleId }}>
       {children}
     </AlertDialogContext.Provider>
   );
@@ -100,38 +105,43 @@ export function AlertDialogOverlay({
   );
 }
 
+export interface AlertDialogContentProps extends ComponentProps<'div'> {
+  initialFocus?: RefObject<HTMLElement | null> | HTMLElement | null;
+}
+
 export function AlertDialogContent({
   className,
   children,
+  initialFocus,
+  'aria-labelledby': ariaLabelledBy,
   ...props
-}: ComponentProps<'div'>) {
+}: AlertDialogContentProps) {
   const context = useContext(AlertDialogContext);
   if (!context) throw new Error('AlertDialogContent must be used within AlertDialog');
 
-  useEffect(() => {
-    if (!context.open) return;
+  const contentRef = useRef<HTMLDivElement>(null);
 
-    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        context.setOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [context]);
+  useFocusTrap({
+    containerRef: contentRef,
+    isActive: context.open,
+    initialFocus,
+    onEscape: () => context.setOpen(false),
+  });
 
   if (!context.open) return null;
 
   return (
     <AlertDialogPortal>
-      <AlertDialogOverlay />
+      <AlertDialogOverlay onClick={() => context.setOpen(false)} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
         <div
+          ref={contentRef}
           role="alertdialog"
           aria-modal="true"
+          aria-labelledby={ariaLabelledBy ?? context.titleId}
+          tabIndex={-1}
           className={cn(
-            'relative w-full max-w-lg rounded-xl border bg-card p-6 text-card-foreground shadow-lg transition-all duration-150 ease-out sm:rounded-2xl',
+            'relative w-full max-w-lg rounded-xl border bg-card p-6 text-card-foreground shadow-lg outline-none transition-all duration-150 ease-out sm:rounded-2xl',
             className,
           )}
           onClick={(e) => e.stopPropagation()}
@@ -173,10 +183,13 @@ export function AlertDialogFooter({
 
 export function AlertDialogTitle({
   className,
+  id,
   ...props
 }: ComponentProps<'h2'>) {
+  const context = useContext(AlertDialogContext);
   return (
     <h2
+      id={id ?? context?.titleId}
       className={cn('font-display text-xl font-bold tracking-tight', className)}
       {...props}
     />

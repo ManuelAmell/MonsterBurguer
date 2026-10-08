@@ -113,10 +113,12 @@ Lista de ítems técnicos y funcionales identificados que deben abordarse en las
    - Conectar con `cocina.public.ts` para marcar la comanda `ANULADA` y con `inventario.public.ts` para emitir `REVERSION` (si la comanda estaba `PENDIENTE`) o `MERMA` (si ya estaba en cocina).
    - Agregar botón de anulación en el ticket del POS y diálogo de confirmación accesible.
 
-2. **Pagos Mixtos en Cobro (RN-42 y RN-43):**
-   - Modificar la restricción `if (input.pagos.length !== 1)` en `caja.service.ts` para aceptar múltiples métodos de pago (ej. $30.000 Efectivo + $19.700 Tarjeta).
-   - Validar que la suma de los montos coincida exactamente con `total + propina` y que solo exista un pago en efectivo.
-   - Habilitar en `CobroDialog` la adición de múltiples líneas de pago dinámicas.
+2. **Pagos Mixtos en Cobro (RN-42 y RN-43)** (completado en `feat/ux-pos-pagos-mixtos`):
+   - Soporte para 1 a 3 métodos de pago (`pagos.length` entre 1 y 3) en `caja.service.ts` y esquema Zod compartido.
+   - Validación de métodos no repetidos y máximo 1 en efectivo con vuelto exacto (`recibido - monto`).
+   - `CobroDialog` con hasta 3 líneas dinámicas, botones de atajo `Resto en [método]` y keypad numérico accesible.
+   - Vista `v_reporte_ventas_metodo` (migración 0007) con distribución proporcional de propina y columna `cobrado`.
+   - Arqueo de caja contando estrictamente las ventas en efectivo para el efectivo esperado (RN-47).
 
 3. **Movimientos Manuales de Caja (RN-46)** (completado en `feat/caja-completa`):
    - Crear tabla `movimiento_caja` (`id`, `sesion_caja_id`, `tipo IN ('INGRESO', 'RETIRO')`, `monto`, `motivo`, `usuario_id`, `created_at`).
@@ -127,12 +129,18 @@ Lista de ítems técnicos y funcionales identificados que deben abordarse en las
    - Crear pantalla en `/admin/categorias` para reordenar, activar/desactivar y crear categorías sin depender de llamadas directas a la API.
    - Diseñar módulo `/admin/usuarios` para crear cajeros y cocineros, cambiar contraseñas y desactivar cuentas (HU-02).
 
-5. **Paginación Robusta de Ingredientes (> 100 ítems):**
-   - En `inventario.repository.ts`, la consulta ordena por `nombre` (`ORDER BY ingrediente.nombre ASC`), pero la condición de cursor evalúa `lt(ingrediente.id, cursor)`.
-   - Ajustar el cursor a un cursor compuesto `(nombre, id)` o paginación por offset/keyset coherente con el ordenamiento alfabético.
+5. **Paginación Robusta de Ingredientes (> 100 ítems)** (completado en `feat/ux-pos-pagos-mixtos`):
+   - Cursor keyset compuesto `(nombre, id)` coherente con el ordenamiento alfabético (`nombre ASC, id ASC`) en `inventario.repository.ts`.
+   - Cursor opaco serializado en base64 y probado con > 100 ingredientes deterministas sin duplicados.
+   - Botón táctil accesible "Cargar más" con indicador de carga en `/admin/inventario`.
 
-6. **Accesibilidad y Trampa de Foco en Diálogos Modales:**
-   - Asegurar que al abrir diálogos (`CobroDialog`, diálogos de confirmación y `NumericKeypad`), el foco del teclado quede atrapado dentro del modal (`focus-trap`) y regrese al elemento disparador al cerrarse con `Escape`.
+6. **Accesibilidad y Trampa de Foco en Diálogos Modales** (completado en `feat/ux-pos-pagos-mixtos`):
+   - Implementación de `useFocusTrap` en `Dialog`, `AlertDialog` y `Sheet`:
+     - Foco automático en el primer elemento interactivo o `initialFocus`.
+     - Trampa cíclica con `Tab` y `Shift+Tab`.
+     - Cierre inmediato con tecla `Escape`.
+     - Restauración de foco al elemento disparador al cerrarse el diálogo.
+     - Atributos accesibles `aria-modal="true"` y vinculación a `aria-labelledby`.
 
 7. **Reportes Analíticos y Filtro por Fechas (Feature D — completado en `feat/reportes-alertas`):**
    - Endpoints `GET /api/v1/admin/reportes/ventas` y `GET /api/v1/admin/reportes/ventas.csv` con parámetros de rango (`desde`, `hasta`) y agrupación (`dia`, `producto`, `metodo`, `cajero`).

@@ -140,12 +140,14 @@ export class AdministracionService {
         pedidos: number;
         ventas: string;
         propinas: string;
+        cobrado: string;
       }>(sql`
         SELECT clave,
                etiqueta,
                sum(pedidos)::int AS pedidos,
                sum(ventas)::bigint AS ventas,
-               sum(propinas)::bigint AS propinas
+               sum(propinas)::bigint AS propinas,
+               sum(cobrado)::bigint AS cobrado
         FROM v_reporte_ventas_metodo
         WHERE fecha_operativa BETWEEN ${desde} AND ${hasta}
         GROUP BY clave, etiqueta
@@ -155,12 +157,14 @@ export class AdministracionService {
         const pedidos = Number(r.pedidos);
         const ventas = Number(r.ventas);
         const propinas = Number(r.propinas);
+        const cobrado = Number(r.cobrado);
         return {
           clave: r.clave,
           etiqueta: r.etiqueta,
           pedidos,
           ventas,
           propinas,
+          cobrado,
           ticketPromedio: pedidos > 0 ? Math.round(ventas / pedidos) : 0,
         };
       });
@@ -251,6 +255,7 @@ export class AdministracionService {
         propinas: totPropinas,
         ticketPromedio: totTicket,
         unidades: totUnidades,
+        cobrado: agrupar === 'metodo' ? totVentas + totPropinas : undefined,
         anulados: {
           cantidad: anuladosCantidad,
           monto: anuladosMonto,
@@ -283,11 +288,16 @@ export class AdministracionService {
       }
       lineas.push(`TOTAL;${data.totales.pedidos};${data.totales.unidades ?? 0};${data.totales.ventas};${data.totales.ticketPromedio}`);
     } else if (data.agrupar === 'metodo') {
-      lineas.push('Método de Pago;Pedidos;Ventas;Propinas;Ticket Promedio');
+      lineas.push('Método de Pago;Pedidos;Ventas;Propinas;Cobrado;Ticket Promedio');
       for (const item of data.items) {
-        lineas.push(`${escapar(item.etiqueta)};${item.pedidos};${item.ventas};${item.propinas};${item.ticketPromedio}`);
+        lineas.push(
+          `${escapar(item.etiqueta)};${item.pedidos};${item.ventas};${item.propinas};${item.cobrado ?? item.ventas + item.propinas};${item.ticketPromedio}`,
+        );
       }
-      lineas.push(`TOTAL;${data.totales.pedidos};${data.totales.ventas};${data.totales.propinas};${data.totales.ticketPromedio}`);
+      const totCobrado = data.totales.cobrado ?? data.totales.ventas + data.totales.propinas;
+      lineas.push(
+        `TOTAL;${data.totales.pedidos};${data.totales.ventas};${data.totales.propinas};${totCobrado};${data.totales.ticketPromedio}`,
+      );
     } else if (data.agrupar === 'cajero') {
       lineas.push('Cajero;Pedidos;Ventas;Propinas;Ticket Promedio');
       for (const item of data.items) {

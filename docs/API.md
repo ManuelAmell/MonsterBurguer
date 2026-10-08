@@ -491,8 +491,9 @@ Cualquier fallo de negocio, validación o autorización devuelve la estructura d
 
 #### `GET /api/v1/ingredientes`
 - **Roles:** `ADMIN`.
-- **Query:** `?stockBajo=true&limit=50&cursor=<uuid>`.
-- **Respuesta (200 OK):** Arreglo de ingredientes con stock actual, mínimo y costo unitario.
+- **Query:** `?stockBajo=true&limit=50&cursor=<string_base64_opaco>`.
+- **Descripción:** Listado de ingredientes ordenado alfabéticamente por `nombre ASC, id ASC`, paginado mediante cursor keyset compuesto `(nombre, id)` serializado en base64 opaco.
+- **Respuesta (200 OK):** Arreglo de ingredientes con stock actual, mínimo, costo unitario y `nextCursor`.
 
 #### `POST /api/v1/ingredientes`
 - **Roles:** `ADMIN`.
@@ -674,12 +675,14 @@ Cualquier fallo de negocio, validación o autorización devuelve la estructura d
 
 #### `POST /api/v1/caja/cobros`
 - **Roles:** `ADMIN`, `CAJERO`.
-- **Descripción:** Ejecuta el cobro del pedido en una única transacción:
+- **Descripción:** Ejecuta el cobro del pedido en una única transacción (RN-42, RN-43):
   1. Si el pedido estaba en `ABIERTO`, lo confirma (descontando stock y creando comanda de forma atómica, RN-44).
-  2. Valida la sesión de caja abierta y que el monto total coincida exactamente con `total + propina` (RN-43).
-  3. Inserta el `recibo` y el desglose de `pago`.
-  4. Cierra el pedido (`estado = 'CERRADO'`).
-  5. Publica `PedidoCobrado` en `evento_sistema`.
+  2. Valida la sesión de caja abierta y que la suma de todos los pagos coincida exactamente con `total + propina` (RN-43).
+  3. Soporta pagos mixtos con 1 a 3 líneas de pago (`pagos.length` entre 1 y 3), métodos no repetidos y máximo 1 pago en `EFECTIVO`.
+  4. En `EFECTIVO`, valida `recibido >= monto` y calcula el cambio exacto (`cambio = recibido - monto`).
+  5. Inserta el `recibo` y el desglose de cada `pago`.
+  6. Cierra el pedido (`estado = 'CERRADO'`).
+  7. Publica `PedidoCobrado` en `evento_sistema`.
 - **Cuerpo (`cobroSchema`):**
   ```json
   {
@@ -688,13 +691,17 @@ Cualquier fallo de negocio, validación o autorización devuelve la estructura d
     "pagos": [
       {
         "metodo": "EFECTIVO",
-        "monto": 54700,
-        "recibido": 60000
+        "monto": 30000,
+        "recibido": 50000
+      },
+      {
+        "metodo": "TARJETA",
+        "monto": 24700,
+        "referencia": "AUTH-9912"
       }
     ]
   }
   ```
-  *(En el MVP actual se restringe estrictamente a un único método de pago por cobro).*
 - **Respuesta:** `201 Created`
   ```json
   {
@@ -702,7 +709,7 @@ Cualquier fallo de negocio, validación o autorización devuelve la estructura d
     "numero": "R-000014",
     "total": 49800,
     "propina": 4900,
-    "cambio": 5300
+    "cambio": 20000
   }
   ```
 

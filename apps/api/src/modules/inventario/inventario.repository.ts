@@ -1,8 +1,25 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import type { TipoMovimientoInventario, Unidad } from '@mb/shared';
 import { DB, type Db, type Executor, type Tx } from '../../shared-kernel/db/db';
 import { ingrediente, movimientoInventario } from './inventario.schema';
+
+function serializarCursorIngrediente(item: { nombre: string; id: string }): string {
+  return Buffer.from(JSON.stringify({ nombre: item.nombre, id: item.id })).toString('base64');
+}
+
+function deserializarCursorIngrediente(cursor: string): { nombre: string; id: string } | null {
+  try {
+    const raw = Buffer.from(cursor, 'base64').toString('utf8');
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.nombre === 'string' && typeof parsed?.id === 'string') {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 @Injectable()
 export class InventarioRepository {
@@ -19,7 +36,15 @@ export class InventarioRepository {
       condiciones.push(lte(ingrediente.stockActual, ingrediente.stockMinimo));
     }
     if (filtros.cursor) {
-      condiciones.push(lt(ingrediente.id, filtros.cursor));
+      const decoded = deserializarCursorIngrediente(filtros.cursor);
+      if (decoded) {
+        condiciones.push(
+          or(
+            gt(ingrediente.nombre, decoded.nombre),
+            and(eq(ingrediente.nombre, decoded.nombre), gt(ingrediente.id, decoded.id)),
+          ),
+        );
+      }
     }
 
     const limit = Math.min(filtros.limit ?? 50, 100);
@@ -27,12 +52,13 @@ export class InventarioRepository {
       .select()
       .from(ingrediente)
       .where(condiciones.length > 0 ? and(...condiciones) : undefined)
-      .orderBy(asc(ingrediente.nombre))
+      .orderBy(asc(ingrediente.nombre), asc(ingrediente.id))
       .limit(limit + 1);
 
     const tieneSiguiente = filas.length > limit;
     const items = tieneSiguiente ? filas.slice(0, limit) : filas;
-    const nextCursor = tieneSiguiente ? (items[items.length - 1]?.id ?? null) : null;
+    const ultimo = items[items.length - 1];
+    const nextCursor = tieneSiguiente && ultimo ? serializarCursorIngrediente(ultimo) : null;
 
     return { items, nextCursor };
   }

@@ -4,20 +4,24 @@ import { X } from 'lucide-react';
 import {
   createContext,
   useContext,
-  useEffect,
+  useId,
+  useRef,
   useState,
   type ComponentProps,
   type Dispatch,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
   type SetStateAction,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useFocusTrap } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 interface SheetContextValue {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
+  titleId: string;
 }
 
 const SheetContext = createContext<SheetContextValue | null>(null);
@@ -38,6 +42,7 @@ export function Sheet({
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const titleId = useId();
 
   const setOpen: Dispatch<SetStateAction<boolean>> = (value) => {
     const nextOpen = typeof value === 'function' ? value(open) : value;
@@ -48,7 +53,7 @@ export function Sheet({
   };
 
   return (
-    <SheetContext.Provider value={{ open, setOpen }}>
+    <SheetContext.Provider value={{ open, setOpen, titleId }}>
       {children}
     </SheetContext.Provider>
   );
@@ -129,7 +134,7 @@ export function SheetOverlay({
 }
 
 const sheetVariants = cva(
-  'fixed z-50 gap-4 bg-card p-6 shadow-xl transition-transform duration-200 ease-out border-border',
+  'fixed z-50 gap-4 bg-card p-6 shadow-xl transition-transform duration-200 ease-out border-border outline-none',
   {
     variants: {
       side: {
@@ -149,6 +154,7 @@ export interface SheetContentProps
   extends ComponentProps<'div'>,
     VariantProps<typeof sheetVariants> {
   showCloseButton?: boolean;
+  initialFocus?: RefObject<HTMLElement | null> | HTMLElement | null;
 }
 
 export function SheetContent({
@@ -156,23 +162,21 @@ export function SheetContent({
   className,
   children,
   showCloseButton = true,
+  initialFocus,
+  'aria-labelledby': ariaLabelledBy,
   ...props
 }: SheetContentProps) {
   const context = useContext(SheetContext);
   if (!context) throw new Error('SheetContent must be used within Sheet');
 
-  useEffect(() => {
-    if (!context.open) return;
+  const contentRef = useRef<HTMLDivElement>(null);
 
-    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        context.setOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [context]);
+  useFocusTrap({
+    containerRef: contentRef,
+    isActive: context.open,
+    initialFocus,
+    onEscape: () => context.setOpen(false),
+  });
 
   if (!context.open) return null;
 
@@ -180,8 +184,11 @@ export function SheetContent({
     <SheetPortal>
       <SheetOverlay onClick={() => context.setOpen(false)} />
       <div
+        ref={contentRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={ariaLabelledBy ?? context.titleId}
+        tabIndex={-1}
         className={cn(sheetVariants({ side }), className)}
         onClick={(e) => e.stopPropagation()}
         {...props}
@@ -223,9 +230,11 @@ export function SheetFooter({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
-export function SheetTitle({ className, ...props }: ComponentProps<'h2'>) {
+export function SheetTitle({ className, id, ...props }: ComponentProps<'h2'>) {
+  const context = useContext(SheetContext);
   return (
     <h2
+      id={id ?? context?.titleId}
       className={cn('font-display text-xl font-bold tracking-tight', className)}
       {...props}
     />
