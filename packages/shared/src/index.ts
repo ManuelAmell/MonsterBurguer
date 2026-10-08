@@ -13,3 +13,5 @@ export * from './schemas/realtime';
 export * from './schemas/clientes';
 export * from './schemas/usuarios';
 export * from './schemas/configuracion';
+export * from './schemas/reportes';
+export * from './schemas/administracion';
