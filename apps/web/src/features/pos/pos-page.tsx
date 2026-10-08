@@ -1,5 +1,5 @@
-import { AlertCircle, Ban, Loader2, Plus, ReceiptText, ShoppingCart, StickyNote, UtensilsCrossed } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { AlertCircle, Ban, Loader2, Plus, ReceiptText, Search, ShoppingCart, StickyNote, UtensilsCrossed, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useSesion } from '@/features/auth/session';
@@ -71,6 +72,34 @@ export function PosPage() {
   const [mostrarAnular, setMostrarAnular] = useState(false);
   const [itemParaNota, setItemParaNota] = useState<{ id: string; nombre: string; nota: string } | null>(null);
 
+  const [textoBusqueda, setTextoBusqueda] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
+  const busquedaInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setBusquedaDebounced(textoBusqueda);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [textoBusqueda]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '/') {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        const isEditable = target?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+        if (!isEditable) {
+          e.preventDefault();
+          busquedaInputRef.current?.focus();
+          busquedaInputRef.current?.select();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const pedidoQ = usePedido(pedidoId);
   const pedido = pedidoId ? pedidoQ.data : undefined;
   const crear = useCrearPedido();
@@ -107,11 +136,33 @@ export function PosPage() {
     });
   }
 
-  const categorias = menu.data ?? [];
+  const categorias = useMemo(() => menu.data ?? [], [menu.data]);
   const categoriaActiva = categorias.find((c) => c.id === categoriaSel) ?? categorias[0];
-  const mesasLibres = (mesas.data ?? []).filter((m) => !m.ocupada);
+  const mesasLibres = useMemo(() => (mesas.data ?? []).filter((m) => !m.ocupada), [mesas.data]);
   const pedidosActivos = pedidosActivosQ.data ?? [];
   const enEdicion = !pedido || pedido.estado === 'ABIERTO';
+
+  const todosLosProductos = useMemo(() => {
+    const list = menu.data ?? [];
+    const map = new Map<string, { id: string; nombre: string; precio: number; agotado: boolean }>();
+    for (const cat of list) {
+      for (const prod of cat.productos) {
+        if (!map.has(prod.id)) {
+          map.set(prod.id, prod);
+        }
+      }
+    }
+    return Array.from(map.values());
+  }, [menu.data]);
+
+  const productosFiltrados = useMemo(() => {
+    const query = busquedaDebounced.trim();
+    if (!query) return null;
+    const normalizar = (txt: string) =>
+      txt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const term = normalizar(query);
+    return todosLosProductos.filter((p) => normalizar(p.nombre).includes(term));
+  }, [todosLosProductos, busquedaDebounced]);
 
   function agregarProducto(productoId: string) {
     setError(null);
@@ -255,6 +306,37 @@ export function PosPage() {
           </div>
         )}
 
+        <div className="relative flex flex-1 min-w-56 max-w-sm flex-col gap-1.5">
+          <label htmlFor="pos-buscar-input" className="sr-only">
+            {t.pos.buscarAtajo}
+          </label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              ref={busquedaInputRef}
+              id="pos-buscar-input"
+              type="search"
+              value={textoBusqueda}
+              onChange={(e) => setTextoBusqueda(e.target.value)}
+              placeholder={t.pos.buscarAtajo}
+              className="h-12 pl-9 pr-9 text-base"
+            />
+            {textoBusqueda && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTextoBusqueda('');
+                  busquedaInputRef.current?.focus();
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={t.pos.limpiarBusqueda}
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+
         <Button
           type="button"
           variant="outline"
@@ -305,6 +387,46 @@ export function PosPage() {
               className="w-full"
               accion={<Button onClick={() => void menu.refetch()}>{t.pos.reintentar}</Button>}
             />
+          ) : productosFiltrados !== null ? (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-semibold text-muted-foreground">
+                  {t.pos.resultadosBusqueda(productosFiltrados.length, busquedaDebounced.trim())}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTextoBusqueda('')}
+                >
+                  {t.pos.limpiarBusqueda}
+                </Button>
+              </div>
+              {productosFiltrados.length > 0 ? (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(8.75rem,1fr))] gap-3">
+                  {productosFiltrados.map((p) => (
+                    <ProductTile
+                      key={p.id}
+                      nombre={p.nombre}
+                      precio={p.precio}
+                      agotado={p.agotado || !enEdicion}
+                      onClick={() => agregarProducto(p.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={Search}
+                  titulo={t.pos.sinResultadosBusqueda(busquedaDebounced.trim())}
+                  descripcion={t.pos.sinResultadosDescripcion}
+                  accion={
+                    <Button variant="outline" onClick={() => setTextoBusqueda('')}>
+                      {t.pos.limpiarBusqueda}
+                    </Button>
+                  }
+                />
+              )}
+            </div>
           ) : (
             <>
               <CategoryRail

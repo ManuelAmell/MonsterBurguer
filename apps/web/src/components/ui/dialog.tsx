@@ -4,19 +4,128 @@ import {
   createContext,
   useContext,
   useEffect,
+  useId,
+  useRef,
   useState,
   type ComponentProps,
   type Dispatch,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
   type SetStateAction,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 
+export const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+export function useFocusTrap({
+  containerRef,
+  isActive,
+  initialFocus,
+  onEscape,
+}: {
+  containerRef: RefObject<HTMLElement | null>;
+  isActive: boolean;
+  initialFocus?: RefObject<HTMLElement | null> | HTMLElement | null;
+  onEscape?: () => void;
+}) {
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    previousActiveElementRef.current = document.activeElement as HTMLElement | null;
+
+    const frameId = requestAnimationFrame(() => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      let elementToFocus: HTMLElement | null = null;
+      if (initialFocus) {
+        elementToFocus = 'current' in initialFocus ? initialFocus.current : initialFocus;
+      }
+
+      if (!elementToFocus) {
+        const focusable = container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+        elementToFocus = focusable[0] ?? null;
+      }
+
+      if (elementToFocus && typeof elementToFocus.focus === 'function') {
+        elementToFocus.focus();
+      } else {
+        container.focus();
+      }
+    });
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (onEscape) {
+          e.preventDefault();
+          e.stopPropagation();
+          onEscape();
+        }
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const focusables = Array.from(
+          container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+        ).filter((el) => el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0);
+
+        if (focusables.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const first = focusables[0]!;
+        const last = focusables[focusables.length - 1]!;
+        const active = document.activeElement;
+
+        if (e.shiftKey) {
+          if (active === first || !container.contains(active)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (active === last || !container.contains(active)) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      document.removeEventListener('keydown', handleKeyDown, true);
+
+      if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+        const elem = previousActiveElementRef.current;
+        requestAnimationFrame(() => {
+          elem.focus();
+        });
+      }
+    };
+  }, [isActive, containerRef, initialFocus, onEscape]);
+}
+
 interface DialogContextValue {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
+  titleId: string;
 }
 
 const DialogContext = createContext<DialogContextValue | null>(null);
@@ -37,6 +146,7 @@ export function Dialog({
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const titleId = useId();
 
   const setOpen: Dispatch<SetStateAction<boolean>> = (value) => {
     const nextOpen = typeof value === 'function' ? value(open) : value;
@@ -47,7 +157,7 @@ export function Dialog({
   };
 
   return (
-    <DialogContext.Provider value={{ open, setOpen }}>
+    <DialogContext.Provider value={{ open, setOpen, titleId }}>
       {children}
     </DialogContext.Provider>
   );
@@ -129,29 +239,28 @@ export function DialogOverlay({
 
 export interface DialogContentProps extends ComponentProps<'div'> {
   showCloseButton?: boolean;
+  initialFocus?: RefObject<HTMLElement | null> | HTMLElement | null;
 }
 
 export function DialogContent({
   className,
   children,
   showCloseButton = true,
+  initialFocus,
+  'aria-labelledby': ariaLabelledBy,
   ...props
 }: DialogContentProps) {
   const context = useContext(DialogContext);
   if (!context) throw new Error('DialogContent must be used within Dialog');
 
-  useEffect(() => {
-    if (!context.open) return;
+  const contentRef = useRef<HTMLDivElement>(null);
 
-    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        context.setOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [context]);
+  useFocusTrap({
+    containerRef: contentRef,
+    isActive: context.open,
+    initialFocus,
+    onEscape: () => context.setOpen(false),
+  });
 
   if (!context.open) return null;
 
@@ -160,10 +269,13 @@ export function DialogContent({
       <DialogOverlay onClick={() => context.setOpen(false)} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
         <div
+          ref={contentRef}
           role="dialog"
           aria-modal="true"
+          aria-labelledby={ariaLabelledBy ?? context.titleId}
+          tabIndex={-1}
           className={cn(
-            'relative w-full max-w-lg rounded-xl border bg-card p-6 text-card-foreground shadow-lg transition-all duration-150 ease-out sm:rounded-2xl',
+            'relative w-full max-w-lg rounded-xl border bg-card p-6 text-card-foreground shadow-lg outline-none transition-all duration-150 ease-out sm:rounded-2xl',
             className,
           )}
           onClick={(e) => e.stopPropagation()}
@@ -207,9 +319,11 @@ export function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
-export function DialogTitle({ className, ...props }: ComponentProps<'h2'>) {
+export function DialogTitle({ className, id, ...props }: ComponentProps<'h2'>) {
+  const context = useContext(DialogContext);
   return (
     <h2
+      id={id ?? context?.titleId}
       className={cn('font-display text-xl font-bold tracking-tight', className)}
       {...props}
     />
