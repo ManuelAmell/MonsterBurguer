@@ -37,6 +37,11 @@ MonsterBurguer/
     │   └── 0011-regimen-no-responsable-y-recibo-no-fiscal.md
     ├── critica/                        # Informes de auditoría crítica adversarial
     │   └── arquitectura-seguridad-1.md # Auditoría de arquitectura y seguridad del Hito 1
+    ├── entregables-isoft/              # Entregables académicos de Ingeniería de Software (UdeC)
+    │   ├── README.md                   # Resumen ejecutivo y guía de entregables
+    │   ├── REPORTE.md                  # Reporte de cumplimiento y estado de artefactos
+    │   ├── *.docx / *.xlsx             # Documentos Word (Manual, SRS, Arquitectura) y Casos de Uso en Excel
+    │   └── *.md                        # Fuentes Markdown con 13 capturas reales de pantalla
     └── verificacion/                   # Informes de verificación de calidad
         ├── contrato-shared.md          # Verificación del contrato tipado de @mb/shared
         ├── hito-0.md                   # Verificación independiente del Hito 0 (Fundaciones)
@@ -71,3 +76,8 @@ MonsterBurguer/
 2. Consulta los informes de verificación en [**docs/verificacion/**](./verificacion/).
 3. Consulta el detalle de inconsistencias corregidas en [**docs/verificacion/docs-cambios.md**](./verificacion/docs-cambios.md).
 4. Consulta el reporte consolidado de QA del MVP en [**docs/verificacion/reporte-qa-2026-10-07.md**](./verificacion/reporte-qa-2026-10-07.md).
+
+### Si vas a consultar los entregables académicos (Universidad de Cartagena):
+1. Consulta [**docs/entregables-isoft/README.md**](./entregables-isoft/README.md) y [**docs/entregables-isoft/REPORTE.md**](./entregables-isoft/REPORTE.md).
+2. Los documentos formales generados en Word y Excel se encuentran en `docs/entregables-isoft/` (*Manual de Usuario*, *Especificación de Requisitos*, *Documento de Arquitectura* y *Casos de Uso*).
+

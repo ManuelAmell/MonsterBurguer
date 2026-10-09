@@ -10,22 +10,23 @@ El sistema nace del documento académico [`Etapa1_Definicion_del_Sistema_Restaur
 
 El sistema se encuentra implementado como un **MVP funcional de extremo a extremo**:
 
-### ✅ Lo que SÍ incluye el MVP:
+### ✅ Lo que SÍ incluye el MVP (100% Completado y Verificado):
 - **Autenticación y Seguridad:** Sesiones opacas almacenadas en PostgreSQL con hash SHA-256 en cookies `HttpOnly`, hash de contraseñas con argon2id, protección CSRF por cabecera `Origin` y rate limiting estricto en login.
-- **Toma de Pedidos (POS):** Terminal táctil en `/pos` con rail de categorías, grilla de productos, buscador con debounce, ticket en vivo, soporte de pedidos para `MESA` (con control de mesas ocupadas) y `LLEVAR`.
+- **Toma de Pedidos (POS):** Terminal táctil en `/pos` con rail de categorías, grilla de productos, buscador rápido con atajo `/` y debounce de 200 ms, ticket en vivo, soporte de pedidos para `MESA` (con monitor de ocupadas) y `LLEVAR`.
 - **Confirmación Atómica:** Descuento de stock en la misma transacción mediante `SELECT ... FOR UPDATE` ordenado por ID (previniendo deadlocks y sobreventas) y creación automática de comanda en cocina.
-- **Cocina (KDS) en Tiempo Real:** Pantalla en `/cocina` con diseño oscuro nativo para alta visibilidad, columnas por estado (`PENDIENTE`, `EN_PREPARACION`, `LISTA`, `ENTREGADA`), temporizadores con umbrales de alerta (8 min warning, 12 min grave) y difusión SSE instantánea (≤ 2 s).
-- **Caja y Cobro:** Apertura de caja con base en efectivo, cobro con cálculo de cambio en efectivo y propina voluntaria sugerida (máx. 10 % redondeada a la centena), emisión de recibo POS de 80 mm (`@media print`) y arqueo de cierre con cálculo de sobrante/faltante.
-- **Inventario y Recetas:** Kardex de movimientos inmutable (`movimiento_inventario`), registro de entradas, ajustes físicos y mermas en `/admin/inventario`, y editor de recetas por producto en `/admin/productos`.
-- **Administración y Retroalimentación:** Dashboard gerencial en `/admin` con KPIs en vivo (ventas hoy, ticket promedio, tiempos KDS, ventas por hora) y retroalimentación automática de agotados (al agotarse un ingrediente, sus productos se marcan automáticamente como no disponibles).
+- **Cocina (KDS) en Tiempo Real:** Pantalla en `/cocina` con diseño oscuro nativo para alta visibilidad, columnas por estado (`PENDIENTE`, `EN_PREPARACION`, `LISTA`, `ENTREGADA`), temporizadores con umbrales de alerta (8 min warning, 12 min grave), difusión SSE instantánea (≤ 2 s) y función "Deshacer" en ≤ 10 s (RN-22).
+- **Anulación de Pedidos:** Endpoint `POST /pedidos/:id/anular` protegido para rol `ADMIN` con motivo obligatorio (RN-50), reversión de stock en comanda pendiente y reclasificación a merma si ya estaba en cocina.
+- **Caja Completa y Cobro Mixto:** Apertura con base en efectivo, cobro con 1 a 3 métodos de pago (`EFECTIVO`, `TARJETA`, `TRANSFERENCIA`) con atajo "Resto en...", propina voluntaria sugerida (10% redondeada), emisión de recibo POS de 80 mm (`@media print`), movimientos manuales de caja (`INGRESO` y `RETIRO`, RN-46), historial de cierres y arqueo ciego con conteo exclusivo de efectivo en el esperado (RN-47).
+- **Inventario y Recetas:** Kardex de movimientos inmutable (`movimiento_inventario`), registro de entradas, ajustes físicos y mermas en `/admin/inventario` con paginación keyset determinista (`(nombre, id)` con botón accesible "Cargar más"), y editor de recetas por producto en `/admin/productos`.
+- **Administración y Analítica:** Dashboard gerencial en `/admin` con KPIs en vivo, gestión completa de usuarios y cambio de claves (`/admin/usuarios`), gestión de categorías (`/admin/categorias`), edición de parámetros del negocio (`/admin/configuracion`), módulo de reportes analíticos de ventas por rango con exportación a CSV UTF-8 (`/admin/reportes`) y widget de alertas operativas.
+- **Accesibilidad WAI-ARIA:** Trampa de foco accesible (`useFocusTrap`) en todos los diálogos (`Dialog`, `AlertDialog`, `Sheet`) con ciclado de `Tab`/`Shift+Tab`, cierre con `Escape` y retorno del foco al disparador original.
+- **Endurecimiento Operativo:** Script de respaldo automatizado [`ops/backup.sh`](./ops/backup.sh) con compresión `pg_dump -F c -b`, retención de 30 días y flag `--verify` para pruebas de restauración en base temporal.
+- **Pruebas Automatizadas:** 314 pruebas unitarias y de integración pasando al 100%, y suite E2E de Playwright sobre Chrome real (7 specs, 13 pruebas automatizadas).
 
-### ⏳ Lo que NO incluye el MVP (Backlog diferido para v1.1 / v2.0):
-- Anulación de pedidos desde la interfaz de usuario (`POST /pedidos/:id/anular` con reversión automática de stock).
-- Pagos mixtos en el mismo cobro (en el MVP actual el cobro valida estrictamente un único método de pago).
-- Movimientos manuales de caja durante el turno (`INGRESO` y `RETIRO` de efectivo).
-- Pantallas web de administración para creación y edición de categorías y usuarios (se configuran por API y seed).
-- Generación de reportes analíticos avanzados con filtro por rango de fechas y exportación a CSV/PDF.
-- Emisión de Documento Equivalente Electrónico POS (DEE POS DIAN con CUDE y QR) y Factura Electrónica (diferido a v2.0; el MVP emite un recibo interno no fiscal rotulado conforme a la ley).
+### ⏳ Lo que NO incluye el MVP (Backlog diferido a v2.0):
+- Emisión de Documento Equivalente Electrónico POS (DEE POS DIAN con CUDE y QR) y Factura Electrónica de Venta (el MVP emite recibos no fiscales conforme al Art. 616-1 del E.T. y el régimen no responsable).
+- Integración directa con pasarelas de pago online externas (PayU, Wompi, datáfonos integrados).
+- Programa de fidelización de clientes con acumulación de puntos.
 
 ---
 
@@ -117,11 +118,16 @@ pnpm --filter api db:migrate # Aplica migraciones pendientes en PostgreSQL
 pnpm --filter api db:seed    # Carga datos semilla de prueba
 
 # Pruebas y Calidad
-pnpm test                    # Ejecuta pruebas unitarias de @mb/shared
-pnpm --filter api test       # Ejecuta pruebas de integración contra DATABASE_URL_TEST
-pnpm lint                    # Linter ESLint en todo el monorepo
+pnpm test                    # Pruebas unitarias de @mb/shared (159 tests)
+pnpm --filter api test       # Pruebas de integración sobre PostgreSQL (155 tests)
+pnpm --filter web test:e2e   # Pruebas E2E de Playwright en navegador real (13 tests)
+pnpm lint                    # Linter ESLint en todo el monorepo (0 advertencias)
 pnpm depcruise               # Verifica fronteras modulares (solo imports *.public.ts)
 pnpm typecheck               # Comprobación de tipos estricta con tsc --noEmit
+
+# Operación y Backups
+./ops/backup.sh              # Genera backup comprimido pg_dump en ./backups
+./ops/backup.sh --verify     # Genera backup y valida restauración en BD temporal
 ```
 
 ---
@@ -132,7 +138,7 @@ pnpm typecheck               # Comprobación de tipos estricta con tsc --noEmit
 MonsterBurguer/
 ├── apps/
 │   ├── api/                 # Backend NestJS 12
-│   │   ├── drizzle/         # Migraciones SQL versionadas (0000..0003)
+│   │   ├── drizzle/         # Migraciones SQL versionadas (0000..0007)
 │   │   ├── src/
 │   │   │   ├── config/      # Variables de entorno validadas con Zod
 │   │   │   ├── db/          # Script semilla (seed.ts)
@@ -141,11 +147,12 @@ MonsterBurguer/
 │   │   │   └── shared-kernel/# DB client, EventBus, OutboxDispatcher, errores
 │   │   └── test/            # Pruebas de integración sobre PostgreSQL real
 │   └── web/                 # Frontend React 19 + Vite 8
+│       ├── e2e/             # Pruebas de integración End-to-End con Playwright
 │       └── src/
 │           ├── app/         # Shell, layouts y router de navegación por rol
 │           ├── components/  # Componentes reutilizables (pos, kds, admin, ui)
 │           ├── features/    # Pantallas por módulo (pos, cocina, caja, admin, auth)
-│           ├── hooks/       # useEventStream (SSE)
+│           ├── hooks/       # useEventStream (SSE) y useFocusTrap
 │           └── lib/         # Cliente API, formateadores y utilidades
 ├── packages/
 │   └── shared/              # Paquete compartido @mb/shared
@@ -154,6 +161,7 @@ MonsterBurguer/
 │           ├── money.ts     # Aritmética pura de dinero en COP (sin floats)
 │           ├── fecha-operativa.ts # Lógica de día de negocio (corte 05:00)
 │           └── enums.ts     # Enums compartidos de roles, estados y métodos de pago
+├── ops/                     # Scripts de infraestructura y operaciones (backup.sh)
 ├── docs/                    # Documentación técnica, arquitectura, datos y guías
 │   ├── README.md            # Índice maestro de documentación
 │   ├── API.md               # Contrato HTTP REST 1:1 y Server-Sent Events
@@ -164,6 +172,7 @@ MonsterBurguer/
 │   ├── DESARROLLO.md        # Guía para desarrolladores, convenciones y glosario
 │   ├── adr/                 # Architectural Decision Records (ADR-001..ADR-011)
 │   ├── critica/             # Auditoría crítica adversarial de arquitectura y seguridad
+│   ├── entregables-isoft/   # Entregables académicos UdeC (Word, Excel y fuentes Markdown)
 │   └── verificacion/        # Informes de verificación de calidad y docs-cambios.md
 ├── docker-compose.yml       # Orquestación de producción local (PostgreSQL, API, Nginx)
 ├── ARCHITECTURE.md          # Arquitectura técnica, C4 en Mermaid, outbox y seguridad

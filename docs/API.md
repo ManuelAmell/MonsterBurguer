@@ -874,14 +874,18 @@ El cliente envía la cabecera `Last-Event-ID` (o query param `?lastEventId=<id>`
 
 ---
 
-## 4. Endpoints y Funcionalidades Fuera del Alcance del MVP (Backlog)
+## 4. Endpoints y Funcionalidades Fuera del Alcance del MVP (Backlog Futuro v2.0)
 
-Los siguientes endpoints fueron previstos en las etapas de diseño preliminares pero **no están implementados** en el código del MVP actual:
+Todas las capacidades nucleares del POS, KDS, Caja Completa (con movimientos manuales e historial), Pagos Mixtos, Anulación y Deshacer, Administración de Usuarios y Categorías, y Reportes Analíticos con Alertas fueron **implementadas y verificadas al 100% en el MVP**.
 
-1. **Gestión de Usuarios (`/usuarios`):** El CRUD de usuarios se encuentra reservado para v1.1; en el MVP los usuarios se configuran mediante el script semilla (`pnpm --filter api db:seed`).
-2. **Anular Pedidos (`POST /pedidos/:id/anular`):** La anulación de pedidos y reversión/merma automática en cocina no cuenta con endpoint expuesto en `pedidos.controller.ts`.
-3. **Deshacer Transición de Comanda (`POST /comandas/:id/deshacer`):** La ventana de reversión de 10 segundos en cocina no está implementada en el controlador.
-4. **Movimientos de Caja Manuales (`POST /caja/sesiones/:id/movimientos`):** Ingresos y retiros manuales no están implementados en el servicio ni en el controlador de caja.
-5. **Historial de Cierres de Caja (`GET /caja/sesiones`):** Consulta histórica de arqueos de caja diferida.
-6. **Pagos Mixtos en Cobro:** `POST /caja/cobros` valida estrictamente un único método de pago en el MVP.
-7. **Configuración Avanzada (`/admin/configuracion`):** La edición dinámica de parámetros del negocio está planificada para hitos posteriores (los reportes agrupados por rango de fechas y alertas operativas ya se encuentran implementados en `/admin/reportes/ventas` y `/admin/alertas`).
+Los siguientes elementos quedan formalmente planificados para la **versión 2.0**:
+
+1. **Documento Equivalente Electrónico POS (DEE POS DIAN):**
+   - Integración con Proveedor Tecnológico autorizado o software propio para firma digital, emisión de CUDE y código QR en el recibo.
+   - El MVP actual emite recibos no fiscales internos conformes con el Artículo 616-1 del E.T. y el régimen no responsable.
+2. **Factura Electrónica de Venta:**
+   - Emisión de factura electrónica formal para clientes que requieran soporte fiscal con RUT/NIT y correo electrónico.
+3. **Pasarelas de Pago en Línea Externas:**
+   - Integración con terminales bancarias inteligentes (datáfonos integrados) o pasarelas de pago web (Wompi, Bold, PayU) para conciliación automática de transacciones con tarjeta o QR.
+4. **Programa de Fidelización y Puntos:**
+   - Acumulación y redención de puntos por cliente frecuente.
