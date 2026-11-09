@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import type { AddressInfo } from 'node:net';
-import { eq, sql } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { crearApp } from '../src/app.factory';
 import { cargarEnv } from '../src/config/env';
@@ -893,9 +893,14 @@ describe.skipIf(!DATABASE_URL_TEST)('Hito 1: Catálogo e Inventario (RN-30 a RN-
         expect(idsSet.has(item.id)).toBe(true);
       }
 
-      for (let i = 1; i < nombresRecuperados.length; i++) {
-        expect(nombresRecuperados[i]!.localeCompare(nombresRecuperados[i - 1]!)).toBeGreaterThanOrEqual(0);
-      }
+      // La BD es la fuente de verdad del orden (evita depender de la collation glibc vs ICU de Node)
+      const todosEnBase = await db
+        .select({ id: ingrediente.id, nombre: ingrediente.nombre })
+        .from(ingrediente)
+        .orderBy(asc(ingrediente.nombre), asc(ingrediente.id));
+
+      expect(idsRecuperados).toEqual(todosEnBase.map((item) => item.id));
+      expect(nombresRecuperados).toEqual(todosEnBase.map((item) => item.nombre));
     });
   });
 });
