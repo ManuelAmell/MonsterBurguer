@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { AddressInfo } from 'node:net';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { Pedido, SesionCaja } from '@mb/shared';
+import type { CobroRespuesta, Pedido } from '@mb/shared';
 import { crearApp } from '../src/app.factory';
 import { cargarEnv } from '../src/config/env';
 import { categoria, producto } from '../src/modules/catalogo/catalogo.schema';
@@ -12,8 +12,6 @@ import {
   type EmisorDocumentoElectronico,
 } from '../src/modules/caja/caja.public';
 import { documentoElectronico } from '../src/modules/caja/caja.schema';
-import { CajaService } from '../src/modules/caja/caja.service';
-import { ProveedorSimulado } from '../src/modules/caja/proveedor-simulado.adaptador';
 import { DB, type Db } from '../src/shared-kernel/db/db';
 import { guardarConfiguracion } from '../src/shared-kernel/configuracion/configuracion.lector';
 import { nuevoId } from '../src/shared-kernel/ids';
@@ -26,9 +24,7 @@ describe.skipIf(!DATABASE_URL_TEST)('Emisión de Documento Equivalente Electrón
   let db: Db;
   let base: string;
   let cookieCajero: string;
-  let idCajero: string;
   let prodClasicaId: string;
-  let cajaService: CajaService;
 
   beforeAll(async () => {
     const url = DATABASE_URL_TEST as string;
@@ -40,10 +36,9 @@ describe.skipIf(!DATABASE_URL_TEST)('Emisión de Documento Equivalente Electrón
     const { port } = app.getHttpServer().address() as AddressInfo;
     base = `http://127.0.0.1:${port}/api/v1`;
     db = app.get<Db>(DB);
-    cajaService = app.get<CajaService>(CajaService);
 
     await crearUsuario(db, { username: 'admin', password: 'admin123', rol: 'ADMIN' });
-    idCajero = await crearUsuario(db, { username: 'cajero_dee', password: 'caja1234', rol: 'CAJERO' });
+    await crearUsuario(db, { username: 'cajero_dee', password: 'caja1234', rol: 'CAJERO' });
 
     const login = async (u: string, p: string) => {
       const res = await fetch(`${base}/auth/login`, {
@@ -116,7 +111,7 @@ describe.skipIf(!DATABASE_URL_TEST)('Emisión de Documento Equivalente Electrón
         cookieCajero,
       );
       expect(cobroRes.status).toBe(201);
-      const dataCobro = await cobroRes.json();
+      const dataCobro = (await cobroRes.json()) as CobroRespuesta;
       expect(dataCobro.documentoElectronico).toBeUndefined();
 
       // Verificar que NO existe fila en documento_electronico
@@ -129,7 +124,10 @@ describe.skipIf(!DATABASE_URL_TEST)('Emisión de Documento Equivalente Electrón
       // Consultar recibo
       const reciboRes = await get(`/recibos/${dataCobro.reciboId}`, cookieCajero);
       expect(reciboRes.status).toBe(200);
-      const reciboData = await reciboRes.json();
+      const reciboData = (await reciboRes.json()) as {
+        leyendas: string[];
+        documentoElectronico: { cude: string; qr: string; proveedor: string; estado: string } | null;
+      };
 
       expect(reciboData.leyendas).toContain('Documento no fiscal');
       expect(reciboData.leyendas).toContain('No responsable de INC');
@@ -159,13 +157,13 @@ describe.skipIf(!DATABASE_URL_TEST)('Emisión de Documento Equivalente Electrón
         cookieCajero,
       );
       expect(cobroRes.status).toBe(201);
-      const dataCobro = await cobroRes.json();
+      const dataCobro = (await cobroRes.json()) as CobroRespuesta;
 
       // Debe incluir documentoElectronico simulado en la respuesta de cobro
       expect(dataCobro.documentoElectronico).toBeDefined();
-      expect(dataCobro.documentoElectronico.cude).toMatch(/^SIMULADO-CUDE-[a-f0-9]{64}$/);
-      expect(dataCobro.documentoElectronico.qr).toContain('documentkey=SIMULADO-');
-      expect(dataCobro.documentoElectronico.proveedor).toBe('SIMULADO');
+      expect(dataCobro.documentoElectronico!.cude).toMatch(/^SIMULADO-CUDE-[a-f0-9]{64}$/);
+      expect(dataCobro.documentoElectronico!.qr).toContain('documentkey=SIMULADO-');
+      expect(dataCobro.documentoElectronico!.proveedor).toBe('SIMULADO');
 
       // Verificar persistencia en base de datos
       const [filaDoc] = await db
@@ -173,14 +171,17 @@ describe.skipIf(!DATABASE_URL_TEST)('Emisión de Documento Equivalente Electrón
         .from(documentoElectronico)
         .where(eq(documentoElectronico.reciboId, dataCobro.reciboId));
       expect(filaDoc).toBeDefined();
-      expect(filaDoc!.cude).toBe(dataCobro.documentoElectronico.cude);
+      expect(filaDoc!.cude).toBe(dataCobro.documentoElectronico!.cude);
       expect(filaDoc!.proveedor).toBe('SIMULADO');
       expect(filaDoc!.estado).toBe('EMITIDO');
 
       // Consultar recibo expuesto
       const reciboRes = await get(`/recibos/${dataCobro.reciboId}`, cookieCajero);
       expect(reciboRes.status).toBe(200);
-      const reciboData = await reciboRes.json();
+      const reciboData = (await reciboRes.json()) as {
+        leyendas: string[];
+        documentoElectronico: { cude: string; qr: string; proveedor: string; estado: string } | null;
+      };
 
       // Leyendas actualizadas para DEE POS
       expect(reciboData.leyendas).toContain('Documento Equivalente Electrónico POS');
@@ -189,10 +190,10 @@ describe.skipIf(!DATABASE_URL_TEST)('Emisión de Documento Equivalente Electrón
 
       // Datos expuestos del documento electrónico
       expect(reciboData.documentoElectronico).toBeDefined();
-      expect(reciboData.documentoElectronico.cude).toBe(filaDoc!.cude);
-      expect(reciboData.documentoElectronico.qr).toBe(filaDoc!.qr);
-      expect(reciboData.documentoElectronico.proveedor).toBe('SIMULADO');
-      expect(reciboData.documentoElectronico.estado).toBe('EMITIDO');
+      expect(reciboData.documentoElectronico!.cude).toBe(filaDoc!.cude);
+      expect(reciboData.documentoElectronico!.qr).toBe(filaDoc!.qr);
+      expect(reciboData.documentoElectronico!.proveedor).toBe('SIMULADO');
+      expect(reciboData.documentoElectronico!.estado).toBe('EMITIDO');
 
       // Restaurar flag apagado
       await guardarConfiguracion(db, 'dee_pos_habilitado', false);
