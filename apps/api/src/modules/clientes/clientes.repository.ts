@@ -54,9 +54,9 @@ export class ClientesRepository {
       // Insensible a mayúsculas y tildes en nombre, y búsqueda por teléfono y documento
       condiciones.push(
         sql`(
-          translate(lower(coalesce(${cliente.nombre}, '')), 'áéíóúüàèìòù', 'aeiouuaeiou') LIKE ${patron}
-          OR translate(lower(coalesce(${cliente.telefono}, '')), 'áéíóúüàèìòù', 'aeiouuaeiou') LIKE ${patron}
-          OR translate(lower(coalesce(${cliente.documento}, '')), 'áéíóúüàèìòù', 'aeiouuaeiou') LIKE ${patron}
+          lower(translate(coalesce(${cliente.nombre}, ''), 'ÁÉÍÓÚÜÀÈÌÒÙáéíóúüàèìòù', 'aeiouuaeiouaeiouuaeiou')) LIKE ${patron}
+          OR lower(translate(coalesce(${cliente.telefono}, ''), 'ÁÉÍÓÚÜÀÈÌÒÙáéíóúüàèìòù', 'aeiouuaeiouaeiouuaeiou')) LIKE ${patron}
+          OR lower(translate(coalesce(${cliente.documento}, ''), 'ÁÉÍÓÚÜÀÈÌÒÙáéíóúüàèìòù', 'aeiouuaeiouaeiouuaeiou')) LIKE ${patron}
         )`,
       );
     }
