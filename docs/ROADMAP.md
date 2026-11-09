@@ -149,5 +149,7 @@ Lista de ítems técnicos y funcionales identificados que deben abordarse en las
    - Endpoint `GET /api/v1/admin/alertas` y widget consolidado de alertas del sistema en el panel administrativo (`/admin`).
 
 8. **Documento Equivalente Electrónico POS (DEE POS DIAN — v2.0):**
-   - Integración con Proveedor Tecnológico autorizado por la DIAN para generar código CUDE, firma digital y código QR en el recibo.
-   - Soporte de Factura Electrónica de Venta para clientes que la soliciten expresamente.
+   - Estado: **Base arquitectónica lista, integración real pendiente** (ADR-0012).
+   - Puerto `EmisorDocumentoElectronico` y adaptador `ProveedorSimulado` preparados en el módulo `caja`, desactivados por defecto mediante el flag `dee_pos_habilitado`.
+   - Pendiente para v2.0: integración con Proveedor Tecnológico autorizado por la DIAN para generar código CUDE real, firma digital y código QR oficial en el recibo.
+   - Pendiente para v2.0: soporte de Factura Electrónica de Venta (FEV) para clientes que la soliciten expresamente.

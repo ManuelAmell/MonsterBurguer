@@ -29,6 +29,18 @@ export async function leerHoraCorte(executor: Executor): Promise<string> {
   return typeof valor === 'string' && /^\d{1,2}:\d{2}$/.test(valor) ? valor : '05:00';
 }
 
+/**
+ * Determina si la emisión de Documento Equivalente Electrónico POS (DEE POS) está habilitada (ADR-0012).
+ * Desactivado por defecto (false).
+ */
+export async function leerDeePosHabilitado(executor: Executor): Promise<boolean> {
+  const valor = await leerConfiguracion(executor, 'dee_pos_habilitado');
+  if (typeof valor === 'boolean') {
+    return valor;
+  }
+  return process.env.DEE_POS_HABILITADO === 'true';
+}
+
 /** Guarda o actualiza un parámetro en la tabla `configuracion`. */
 export async function guardarConfiguracion(
   executor: Executor,

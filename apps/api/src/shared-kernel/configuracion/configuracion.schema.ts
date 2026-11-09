@@ -16,6 +16,7 @@ export const CONFIGURACION_INICIAL: Record<string, unknown> = {
   permitir_stock_negativo: false,
   kds_umbral_warning_min: 8,
   kds_umbral_grave_min: 12,
+  dee_pos_habilitado: false,
   negocio: {
     razonSocial: 'MonsterBurguer',
     documento: '',

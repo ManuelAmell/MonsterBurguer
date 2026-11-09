@@ -117,3 +117,31 @@ export const movimientoCaja = pgTable(
   ],
 );
 
+export const ESTADOS_DOCUMENTO_ELECTRONICO = ['EMITIDO', 'RECHAZADO', 'CONTINGENCIA'] as const;
+export type EstadoDocumentoElectronico = (typeof ESTADOS_DOCUMENTO_ELECTRONICO)[number];
+
+/** Documento Equivalente Electrónico POS (DEE POS) o Factura Electrónica asociado a un recibo (ADR-0012). */
+export const documentoElectronico = pgTable(
+  'documento_electronico',
+  {
+    id: uuid().primaryKey(),
+    reciboId: uuid()
+      .notNull()
+      .references(() => recibo.id, { onDelete: 'cascade' }),
+    cude: text().notNull(),
+    qr: text().notNull(),
+    proveedor: text().notNull(),
+    estado: text({ enum: ESTADOS_DOCUMENTO_ELECTRONICO }).notNull().default('EMITIDO'),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('documento_electronico_recibo_uq').on(t.reciboId),
+    index('documento_electronico_recibo_idx').on(t.reciboId),
+    check(
+      'documento_electronico_estado_check',
+      sql`${t.estado} in ('EMITIDO', 'RECHAZADO', 'CONTINGENCIA')`,
+    ),
+  ],
+);
+
+

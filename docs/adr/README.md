@@ -17,6 +17,7 @@ Registro de decisiones arquitectónicas relevantes del proyecto MonsterBurguer P
 | [ADR-009](./0009-cantidades-de-inventario-en-enteros-de-unidad-base.md) | Cantidades de Inventario en Enteros de Unidad Base (`G`, `ML`, `UND`) | Aceptado | 2026-10-06 |
 | [ADR-010](./0010-spa-con-react-19-y-vite-8.md) | Frontend SPA con React 19, Vite 8 y React Router | Aceptado | 2026-10-06 |
 | [ADR-011](./0011-regimen-no-responsable-y-recibo-no-fiscal.md) | Régimen NO_RESPONSABLE Parametrizable y Recibo Interno No Fiscal | Aceptado | 2026-10-06 |
+| [ADR-012](./0012-puerto-emisor-documento-electronico-dee-pos.md) | Puerto de Emisión para Documento Equivalente Electrónico POS (DEE POS) y Proveedor Simulado | Propuesto | 2026-11-09 |
 
 ---
 *Para más detalles sobre la arquitectura del sistema, consultar [ARCHITECTURE.md](../../ARCHITECTURE.md).*
