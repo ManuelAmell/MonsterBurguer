@@ -50,6 +50,13 @@
       "when": 1791334000000,
       "tag": "0007_reporte_metodo_pagos",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791335000000,
+      "tag": "0008_documento_electronico",
+      "breakpoints": true
     }
   ]
 }

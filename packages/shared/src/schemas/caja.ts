@@ -123,12 +123,20 @@ export type CobroOutput = z.infer<typeof cobroSchema>;
 
 // --- Respuesta de Cobro ---
 
+export const documentoElectronicoResumenSchema = z.object({
+  cude: z.string(),
+  qr: z.string(),
+  proveedor: z.string().optional(),
+});
+export type DocumentoElectronicoResumen = z.infer<typeof documentoElectronicoResumenSchema>;
+
 export const cobroRespuestaSchema = z.object({
   reciboId: uuidSchema,
   numero: z.string(),
   total: pesosSchema,
   propina: pesosSchema,
   cambio: pesosSchema,
+  documentoElectronico: documentoElectronicoResumenSchema.optional().nullable(),
 });
 export type CobroRespuesta = z.infer<typeof cobroRespuestaSchema>;
 

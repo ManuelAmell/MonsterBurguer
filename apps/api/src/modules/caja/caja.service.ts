@@ -16,6 +16,7 @@ import {
 } from '@mb/shared';
 import {
   leerConfiguracion,
+  leerDeePosHabilitado,
   leerRegimen,
 } from '../../shared-kernel/configuracion/configuracion.lector';
 import { TASA_IMPUESTO_BP } from '@mb/shared';
@@ -25,7 +26,13 @@ import { EventBus } from '../../shared-kernel/events/event-bus';
 import { nuevoId } from '../../shared-kernel/ids';
 import { IdentidadPublicService } from '../identidad/identidad.public';
 import { PedidosService } from '../pedidos/pedidos.public';
-import { movimientoCaja, pago, recibo, sesionCaja } from './caja.schema';
+import { documentoElectronico, movimientoCaja, pago, recibo, sesionCaja } from './caja.schema';
+import {
+  EMISOR_DOCUMENTO_ELECTRONICO,
+  type DatosEmisionDocumento,
+  type EmisorDocumentoElectronico,
+} from './emisor-documento-electronico.puerto';
+import { PROVEEDOR_SIMULADO, ProveedorSimulado } from './proveedor-simulado.adaptador';
 
 type SesionFila = typeof sesionCaja.$inferSelect;
 
@@ -38,6 +45,8 @@ export class CajaService {
     private readonly eventBus: EventBus,
     private readonly pedidos: PedidosService,
     private readonly identidad: IdentidadPublicService,
+    @Inject(EMISOR_DOCUMENTO_ELECTRONICO)
+    private readonly emisorDocumento: EmisorDocumentoElectronico = new ProveedorSimulado(),
   ) {}
 
   // --- Sesión de caja (RN-40, RN-41, RN-47) ---
@@ -463,13 +472,79 @@ export class CajaService {
         });
       }
 
+      // Emisión opcional de Documento Equivalente Electrónico POS (DEE POS - ADR-0012)
+      let documentoElectronicoResumen: {
+        cude: string;
+        qr: string;
+        proveedor: string;
+      } | null = null;
+
+      const deeHabilitado = await leerDeePosHabilitado(tx);
+      if (deeHabilitado) {
+        const configNegocio =
+          ((await leerConfiguracion(tx, 'negocio')) as Record<string, string>) ?? {};
+        const pedidoCompleto = await this.pedidos.obtenerPedido(ped.id);
+
+        const datosEmision: DatosEmisionDocumento = {
+          reciboId,
+          numero: formatoNumeroRecibo(r!.numero),
+          fecha: new Date(),
+          total: ped.total,
+          base: ped.base,
+          impuesto: ped.impuesto,
+          impuestoTasaBp: TASA_IMPUESTO_BP[regimen],
+          regimenTributario: regimen,
+          propina,
+          items: pedidoCompleto.items.map((i) => ({
+            nombre: i.nombre,
+            cantidad: i.cantidad,
+            precioUnitario: i.precioUnitario,
+            totalLinea: i.totalLinea,
+            nota: i.nota ?? null,
+          })),
+          pagos: input.pagos.map((p) => ({
+            metodo: p.metodo,
+            monto: p.monto,
+            referencia: p.referencia ?? null,
+          })),
+          negocio: {
+            razonSocial: configNegocio.razonSocial ?? configNegocio.nombre,
+            documento: configNegocio.documento ?? configNegocio.nit,
+            direccion: configNegocio.direccion,
+            telefono: configNegocio.telefono,
+          },
+        };
+
+        const resultadoDee = await this.emisorDocumento.emitir(datosEmision);
+        await tx.insert(documentoElectronico).values({
+          id: nuevoId(),
+          reciboId,
+          cude: resultadoDee.cude,
+          qr: resultadoDee.qr,
+          proveedor: resultadoDee.proveedor,
+          estado: 'EMITIDO',
+        });
+
+        documentoElectronicoResumen = {
+          cude: resultadoDee.cude,
+          qr: resultadoDee.qr,
+          proveedor: resultadoDee.proveedor,
+        };
+      }
+
       await this.pedidos.cerrar(tx, ped.id);
       await this.eventBus.publicarEnTx(tx, {
         tipo: 'PedidoCobrado',
         modulo: 'caja',
         agregadoId: ped.id,
         usuarioId: usuario.id,
-        payload: { pedidoId: ped.id, reciboId, numeroDia: ped.numeroDia, total: ped.total },
+        payload: {
+          pedidoId: ped.id,
+          reciboId,
+          numeroDia: ped.numeroDia,
+          total: ped.total,
+          ...(documentoElectronicoResumen ? { cude: documentoElectronicoResumen.cude } : {}),
+        },
       });
       return {
         reciboId,
@@ -477,21 +552,38 @@ export class CajaService {
         total: ped.total,
         propina,
         cambio,
+        ...(documentoElectronicoResumen
+          ? { documentoElectronico: documentoElectronicoResumen }
+          : {}),
       };
     });
   }
 
-  // --- Recibo para imprimir (RN-45) ---
+  // --- Recibo para imprimir (RN-45, ADR-0012) ---
 
   async obtenerRecibo(id: string) {
     const [r] = await this.db.select().from(recibo).where(eq(recibo.id, id)).limit(1);
     if (!r) throw DomainError.noEncontrado('Recibo no encontrado.');
     const pagos = await this.db.select().from(pago).where(eq(pago.reciboId, id));
+    const [doc] = await this.db
+      .select()
+      .from(documentoElectronico)
+      .where(eq(documentoElectronico.reciboId, id))
+      .limit(1);
     const ped = await this.pedidos.obtenerPedido(r.pedidoId);
     const negocio = (await leerConfiguracion(this.db, 'negocio')) ?? {};
     const nombreImpuesto = NOMBRE_IMPUESTO[r.regimenTributario];
-    const leyendas = ['Documento no fiscal'];
+
+    // Un DEE POS del proveedor simulado no tiene validez fiscal: el recibo sigue siendo no fiscal (RN-45).
+    const leyendas: string[] = [];
+    if (doc && doc.proveedor !== PROVEEDOR_SIMULADO) {
+      leyendas.push('Documento Equivalente Electrónico POS');
+    } else {
+      leyendas.push('Documento no fiscal');
+      if (doc) leyendas.push('DEE POS SIMULADO - sin validez fiscal');
+    }
     if (r.regimenTributario === 'NO_RESPONSABLE') leyendas.push('No responsable de INC');
+
     return {
       id: r.id,
       numero: formatoNumeroRecibo(r.numero),
@@ -526,6 +618,15 @@ export class CajaService {
       })),
       cambio: pagos.reduce((acc, p) => acc + (p.cambio ?? 0), 0),
       leyendas,
+      documentoElectronico: doc
+        ? {
+            cude: doc.cude,
+            qr: doc.qr,
+            proveedor: doc.proveedor,
+            estado: doc.estado,
+            fechaEmision: doc.createdAt.toISOString(),
+          }
+        : null,
     };
   }
 
