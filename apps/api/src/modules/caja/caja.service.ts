@@ -32,7 +32,7 @@ import {
   type DatosEmisionDocumento,
   type EmisorDocumentoElectronico,
 } from './emisor-documento-electronico.puerto';
-import { ProveedorSimulado } from './proveedor-simulado.adaptador';
+import { PROVEEDOR_SIMULADO, ProveedorSimulado } from './proveedor-simulado.adaptador';
 
 type SesionFila = typeof sesionCaja.$inferSelect;
 
@@ -574,11 +574,13 @@ export class CajaService {
     const negocio = (await leerConfiguracion(this.db, 'negocio')) ?? {};
     const nombreImpuesto = NOMBRE_IMPUESTO[r.regimenTributario];
 
+    // Un DEE POS del proveedor simulado no tiene validez fiscal: el recibo sigue siendo no fiscal (RN-45).
     const leyendas: string[] = [];
-    if (doc) {
+    if (doc && doc.proveedor !== PROVEEDOR_SIMULADO) {
       leyendas.push('Documento Equivalente Electrónico POS');
     } else {
       leyendas.push('Documento no fiscal');
+      if (doc) leyendas.push('DEE POS SIMULADO - sin validez fiscal');
     }
     if (r.regimenTributario === 'NO_RESPONSABLE') leyendas.push('No responsable de INC');
 

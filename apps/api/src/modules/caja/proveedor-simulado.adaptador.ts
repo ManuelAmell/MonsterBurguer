@@ -6,6 +6,8 @@ import type {
   ResultadoEmisionDocumento,
 } from './emisor-documento-electronico.puerto';
 
+export const PROVEEDOR_SIMULADO = 'SIMULADO';
+
 /**
  * Adaptador simulado para emisión de Documento Equivalente Electrónico POS (DEE POS).
  * Devuelve un CUDE y una URL/QR claramente marcados como simulados (prefijo "SIMULADO-").
@@ -19,12 +21,13 @@ export class ProveedorSimulado implements EmisorDocumentoElectronico {
       .digest('hex');
 
     const cude = `SIMULADO-CUDE-${hash}`;
-    const qr = `https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=SIMULADO-${hash}`;
+    // Dominio reservado .invalid (RFC 2606): un QR simulado nunca debe apuntar al catálogo real de la DIAN.
+    const qr = `https://dee-pos.simulado.invalid/qr?documentkey=SIMULADO-${hash}`;
 
     return {
       cude,
       qr,
-      proveedor: 'SIMULADO',
+      proveedor: PROVEEDOR_SIMULADO,
       fechaEmision: new Date().toISOString(),
     };
   }

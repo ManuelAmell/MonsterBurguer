@@ -52,7 +52,9 @@ describe('ProveedorSimulado (adaptador de emisión de DEE POS)', () => {
 
     expect(resultado.qr).toBeDefined();
     expect(resultado.qr).toContain('documentkey=SIMULADO-');
-    expect(resultado.qr.startsWith('https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=SIMULADO-')).toBe(true);
+    // Un QR simulado no puede apuntar al catálogo real de la DIAN
+    expect(resultado.qr).not.toContain('dian.gov.co');
+    expect(new URL(resultado.qr).hostname.endsWith('.invalid')).toBe(true);
   });
 
   it('indica "SIMULADO" como nombre de proveedor y fecha de emisión válida', async () => {

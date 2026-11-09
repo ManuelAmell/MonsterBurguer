@@ -183,10 +183,12 @@ describe.skipIf(!DATABASE_URL_TEST)('Emisión de Documento Equivalente Electrón
         documentoElectronico: { cude: string; qr: string; proveedor: string; estado: string } | null;
       };
 
-      // Leyendas actualizadas para DEE POS
-      expect(reciboData.leyendas).toContain('Documento Equivalente Electrónico POS');
+      // Un DEE POS simulado NO es fiscal: el recibo no puede presentarse como documento electrónico real
+      expect(reciboData.leyendas).toContain('Documento no fiscal');
+      expect(reciboData.leyendas).toContain('DEE POS SIMULADO - sin validez fiscal');
+      expect(reciboData.leyendas).not.toContain('Documento Equivalente Electrónico POS');
       expect(reciboData.leyendas).toContain('No responsable de INC');
-      expect(reciboData.leyendas).not.toContain('Documento no fiscal');
+      expect(dataCobro.documentoElectronico!.qr).not.toContain('dian.gov.co');
 
       // Datos expuestos del documento electrónico
       expect(reciboData.documentoElectronico).toBeDefined();

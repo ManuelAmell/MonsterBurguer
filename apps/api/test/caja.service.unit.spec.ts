@@ -48,7 +48,7 @@ describe('CajaService (pruebas unitarias con puerto mockeado)', () => {
     return { service, mockDb, mockEventBus, mockPedidos, mockIdentidad, mockEmisor };
   };
 
-  it('obtenerRecibo: incluye DEE POS y leyendas correspondientes cuando existe documento_electronico', async () => {
+  it('obtenerRecibo: con un proveedor real incluye la leyenda DEE POS y quita "Documento no fiscal"', async () => {
     const { service, mockDb, mockPedidos } = crearMocks();
 
     const mockRecibo = {
@@ -69,9 +69,9 @@ describe('CajaService (pruebas unitarias con puerto mockeado)', () => {
     const mockDoc = {
       id: 'doc-1',
       reciboId: 'recibo-1',
-      cude: 'SIMULADO-CUDE-XYZ',
-      qr: 'https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=SIMULADO-XYZ',
-      proveedor: 'SIMULADO',
+      cude: 'CUDE-PROVEEDOR-PRUEBA-XYZ',
+      qr: 'https://proveedor-prueba.invalid/qr?documentkey=XYZ',
+      proveedor: 'PROVEEDOR_PRUEBA',
       estado: 'EMITIDO',
       createdAt: new Date('2026-11-09T14:00:00.000Z'),
     };
@@ -127,9 +127,9 @@ describe('CajaService (pruebas unitarias con puerto mockeado)', () => {
     expect(resultado.leyendas).toContain('No responsable de INC');
     expect(resultado.leyendas).not.toContain('Documento no fiscal');
     expect(resultado.documentoElectronico).toEqual({
-      cude: 'SIMULADO-CUDE-XYZ',
-      qr: 'https://catalogo-vpfe.dian.gov.co/document/searchqr?documentkey=SIMULADO-XYZ',
-      proveedor: 'SIMULADO',
+      cude: 'CUDE-PROVEEDOR-PRUEBA-XYZ',
+      qr: 'https://proveedor-prueba.invalid/qr?documentkey=XYZ',
+      proveedor: 'PROVEEDOR_PRUEBA',
       estado: 'EMITIDO',
       fechaEmision: '2026-11-09T14:00:00.000Z',
     });
